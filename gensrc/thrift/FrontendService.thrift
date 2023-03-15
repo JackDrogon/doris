@@ -523,6 +523,33 @@ struct TLoadTxnBeginResult {
     4: optional i64 db_id
 }
 
+struct Coordinator {
+    1: required string host
+    2: required i32 port
+}
+
+struct TBeginTxnRequest {
+    1: optional string cluster
+    2: required string user
+    3: required string passwd
+    4: required string db
+    5: required list<string> tables
+    6: optional string user_ip
+    7: required string label
+    8: optional i64 auth_code
+    // The real value of timeout should be i32. i64 ensures the compatibility of interface.
+    9: optional i64 timeout
+    10: optional Types.TUniqueId request_id
+    11: optional string token
+}
+
+struct TBeginTxnResult {
+    1: required Status.TStatus status
+    2: optional i64 txnId
+    3: optional string job_status // if label already used, set status of existing job
+    4: optional i64 db_id
+}
+
 // StreamLoad request, used to load a streaming to engine
 struct TStreamLoadPutRequest {
     1: optional string cluster
@@ -634,6 +661,27 @@ struct TLoadTxnCommitResult {
     1: required Status.TStatus status
 }
 
+struct TCommitTxnRequest {
+    1: optional string cluster
+    2: required string user
+    3: required string passwd
+    4: required string db
+    5: required list<string> tables
+    6: optional string user_ip
+    7: required i64 txnId
+    8: required bool sync
+    9: optional list<Types.TTabletCommitInfo> commitInfos
+    10: optional i64 auth_code
+    11: optional TTxnCommitAttachment txnCommitAttachment
+    12: optional i64 thrift_rpc_timeout_ms
+    13: optional string token
+    14: optional i64 db_id
+}
+
+struct TCommitTxnResult {
+    1: required Status.TStatus status
+}
+
 struct TLoadTxn2PCRequest {
     1: optional string cluster
     2: required string user
@@ -648,6 +696,24 @@ struct TLoadTxn2PCRequest {
 }
 
 struct TLoadTxn2PCResult {
+    1: required Status.TStatus status
+}
+
+struct TRollbackTxnRequest {
+    1: optional string cluster
+    2: required string user
+    3: required string passwd
+    4: required string db
+    5: required list<string> tables
+    6: optional string user_ip
+    7: required i64 txnId
+    8: optional string reason
+    9: optional i64 auth_code
+    10: optional TTxnCommitAttachment txnCommitAttachment
+    11: optional string token
+}
+
+struct TRollbackTxnResult {
     1: required Status.TStatus status
 }
 
@@ -897,6 +963,10 @@ service FrontendService {
     TLoadTxn2PCResult loadTxn2PC(1: TLoadTxn2PCRequest request)
     TLoadTxnCommitResult loadTxnCommit(1: TLoadTxnCommitRequest request)
     TLoadTxnRollbackResult loadTxnRollback(1: TLoadTxnRollbackRequest request)
+
+    TBeginTxnResult beginTxn(1: TBeginTxnRequest request)
+    TCommitTxnResult commitTxn(1: TCommitTxnRequest request)
+    TRollbackTxnResult rollbackTxn(1: TRollbackTxnRequest request)
 
     TWaitingTxnStatusResult waitingTxnStatus(1: TWaitingTxnStatusRequest request)
 

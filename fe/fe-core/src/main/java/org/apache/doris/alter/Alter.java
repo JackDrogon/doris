@@ -215,6 +215,9 @@ public class Alter {
 
             olapTable.setStoragePolicy(currentStoragePolicy);
             needProcessOutsideTableLock = true;
+        } else if (currentAlterOps.checkCcrEnable(alterClauses)) {
+            olapTable.setCcrEnable(currentAlterOps.isCcrEnable(alterClauses));
+            needProcessOutsideTableLock = true;
         } else if (currentAlterOps.hasSchemaChangeOp()) {
             // if modify storage type to v2, do schema change to convert all related tablets to segment v2 format
             schemaChangeHandler.process(alterClauses, clusterName, db, olapTable);
@@ -511,7 +514,7 @@ public class Alter {
                 Map<String, String> properties = alterClause.getProperties();
                 // currently, only in memory and storage policy property could reach here
                 Preconditions.checkState(properties.containsKey(PropertyAnalyzer.PROPERTIES_INMEMORY)
-                        || properties.containsKey(PropertyAnalyzer.PROPERTIES_STORAGE_POLICY));
+                        || properties.containsKey(PropertyAnalyzer.PROPERTIES_STORAGE_POLICY) || properties.containsKey(PropertyAnalyzer.PROPERTIES_CCR_ENABLE));
                 ((SchemaChangeHandler) schemaChangeHandler).updateTableProperties(db, tableName, properties);
             } else {
                 throw new DdlException("Invalid alter operation: " + alterClause.getOpType());

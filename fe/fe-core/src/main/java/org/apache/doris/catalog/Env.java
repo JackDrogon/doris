@@ -4392,6 +4392,7 @@ public class Env {
         }
         tableProperty.buildInMemory();
         tableProperty.buildStoragePolicy();
+        tableProperty.buildCcrEnable();
 
         // need to update partition info meta
         for (Partition partition : table.getPartitions()) {

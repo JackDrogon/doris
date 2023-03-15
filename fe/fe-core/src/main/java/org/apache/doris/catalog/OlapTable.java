@@ -1755,6 +1755,19 @@ public class OlapTable extends Table {
         return "";
     }
 
+    public void setCcrEnable(boolean ccrEnable) throws UserException {
+        // TODO(Drogon): Config.enable_ccr
+        if (tableProperty == null) {
+            tableProperty = new TableProperty(new HashMap<>());
+        }
+        tableProperty.modifyTableProperties(PropertyAnalyzer.PROPERTIES_CCR_ENABLE, Boolean.toString(ccrEnable));
+        tableProperty.buildCcrEnable();
+    }
+
+    public boolean isCcrEnable() {
+        return tableProperty != null ?  tableProperty.isCcrEnable() : false;
+    }
+
     public void setDisableAutoCompaction(boolean disableAutoCompaction) {
         if (tableProperty == null) {
             tableProperty = new TableProperty(new HashMap<>());

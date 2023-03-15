@@ -60,6 +60,7 @@ public class TableProperty implements Writable {
     private boolean isInMemory = false;
 
     private String storagePolicy = "";
+    private Boolean ccrEnable = null; 
     private boolean isDynamicSchema = false;
 
     /*
@@ -106,6 +107,7 @@ public class TableProperty implements Writable {
             case OperationType.OP_MODIFY_IN_MEMORY:
                 buildInMemory();
                 buildStoragePolicy();
+                buildCcrEnable();
                 break;
             default:
                 break;
@@ -187,6 +189,18 @@ public class TableProperty implements Writable {
 
     public String getStoragePolicy() {
         return storagePolicy;
+    }
+
+    public TableProperty buildCcrEnable() {
+        ccrEnable = Boolean.parseBoolean(properties.getOrDefault(PropertyAnalyzer.PROPERTIES_CCR_ENABLE, "false"));
+        return this;
+    }
+
+    public boolean isCcrEnable() {
+        if (ccrEnable == null) {
+            buildCcrEnable();
+        }
+        return ccrEnable;
     }
 
     public TableProperty buildDynamicSchema() {
@@ -343,6 +357,7 @@ public class TableProperty implements Writable {
                 .buildDataSortInfo()
                 .buildCompressionType()
                 .buildStoragePolicy()
+                .buildCcrEnable()
                 .buildEnableLightSchemaChange()
                 .buildStoreRowColumn()
                 .buildDisableAutoCompaction();
