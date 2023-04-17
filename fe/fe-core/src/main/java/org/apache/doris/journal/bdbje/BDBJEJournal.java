@@ -303,6 +303,7 @@ public class BDBJEJournal implements Journal { // CHECKSTYLE IGNORE THIS LINE: B
         if (bdbEnvironment == null) {
             File dbEnv = new File(environmentPath);
             bdbEnvironment = new BDBEnvironment();
+
             HostInfo helperNode = Env.getServingEnv().getHelperNode();
             String helperHostPort = helperNode.getHost() + ":" + helperNode.getPort();
             try {

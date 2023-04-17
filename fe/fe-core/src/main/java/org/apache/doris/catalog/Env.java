@@ -2477,7 +2477,12 @@ public class Env {
         long startTime = System.currentTimeMillis();
         boolean hasLog = false;
         while (true) {
-            JournalEntity entity = cursor.next();
+            Pair<Long, JournalEntity> kv = cursor.next();
+            if (kv == null) {
+                break;
+            }
+            JournalEntity entity = kv.second;
+            LOG.info("replay journal id: {}, entity: {}", kv.first, entity);
             if (entity == null) {
                 break;
             }
