@@ -149,7 +149,8 @@ public class EditLog {
     /**
      * Load journal.
      **/
-    public static void loadJournal(Env env, JournalEntity journal) {
+    public static void loadJournal(Env env, Long logId, JournalEntity journal) {
+        LOG.info("replay journal id: {}", logId);
         short opCode = journal.getOpCode();
         if (opCode != OperationType.OP_SAVE_NEXTID && opCode != OperationType.OP_TIMESTAMP) {
             LOG.debug("replay journal op code: {}", opCode);
@@ -509,6 +510,7 @@ public class EditLog {
                 case OperationType.OP_UPSERT_TRANSACTION_STATE: {
                     final TransactionState state = (TransactionState) journal.getData();
                     Env.getCurrentGlobalTransactionMgr().replayUpsertTransactionState(state);
+                    LOG.info("logid: {}, opcode: {}, tid: {}, json: {}", logId, opCode, state.getTransactionId(), state.toJson());
                     LOG.debug("opcode: {}, tid: {}", opCode, state.getTransactionId());
                     break;
                 }
@@ -1061,6 +1063,7 @@ public class EditLog {
 
         long start = System.currentTimeMillis();
         try {
+            LOG.info("write op {} to edit log, writable: {}", op, writable);
             journal.write(op, writable);
         } catch (Throwable t) {
             // Throwable contains all Exception and Error, such as IOException and

@@ -2481,13 +2481,14 @@ public class Env {
             if (kv == null) {
                 break;
             }
+            Long logId = kv.first;
             JournalEntity entity = kv.second;
-            LOG.info("replay journal id: {}, entity: {}", kv.first, entity);
             if (entity == null) {
                 break;
             }
+            LOG.info("replay journal id: {}, entity: {}", kv.first, entity);
             hasLog = true;
-            EditLog.loadJournal(this, entity);
+            EditLog.loadJournal(this, logId, entity);
             replayedJournalId.incrementAndGet();
             LOG.debug("journal {} replayed.", replayedJournalId);
             if (feType != FrontendNodeType.MASTER) {

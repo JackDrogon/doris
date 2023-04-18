@@ -29,22 +29,33 @@ import org.apache.doris.common.io.Writable;
 import org.apache.doris.common.util.RangeUtils;
 
 import com.google.common.collect.Range;
+import com.google.gson.annotations.SerializedName;
 
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 
 public class PartitionPersistInfo implements Writable {
+    @SerializedName(value = "dbId")
     private Long dbId;
+    @SerializedName(value = "tableId")
     private Long tableId;
+    @SerializedName(value = "partition")
     private Partition partition;
 
+    @SerializedName(value = "range")
     private Range<PartitionKey> range;
+    @SerializedName(value = "listPartitionItem")
     private PartitionItem listPartitionItem;
+    @SerializedName(value = "dataProperty")
     private DataProperty dataProperty;
+    @SerializedName(value = "replicaAlloc")
     private ReplicaAllocation replicaAlloc;
+    @SerializedName(value = "isInMemory")
     private boolean isInMemory = false;
+    @SerializedName(value = "isTempPartition")
     private boolean isTempPartition = false;
+    @SerializedName(value = "isMutable")
     private boolean isMutable = true;
 
     public PartitionPersistInfo() {
