@@ -23,6 +23,7 @@ import org.apache.doris.analysis.UserIdentity;
 import org.apache.doris.backup.BackupJob;
 import org.apache.doris.backup.Repository;
 import org.apache.doris.backup.RestoreJob;
+import org.apache.doris.binlog.UpsertRecord;
 import org.apache.doris.blockrule.SqlBlockRule;
 import org.apache.doris.catalog.BrokerMgr;
 import org.apache.doris.catalog.Database;
@@ -511,6 +512,8 @@ public class EditLog {
                     final TransactionState state = (TransactionState) journal.getData();
                     Env.getCurrentGlobalTransactionMgr().replayUpsertTransactionState(state);
                     LOG.info("logid: {}, opcode: {}, tid: {}, json: {}", logId, opCode, state.getTransactionId(), state.toJson());
+                    UpsertRecord upsertRecord = new UpsertRecord(state);
+                    LOG.info("logid: {}, upsert record: {}", logId, upsertRecord);
                     LOG.debug("opcode: {}, tid: {}", opCode, state.getTransactionId());
                     break;
                 }
@@ -1366,6 +1369,8 @@ public class EditLog {
 
     // for TransactionState
     public void logInsertTransactionState(TransactionState transactionState) {
+        UpsertRecord upsertRecord = new UpsertRecord(transactionState);
+        LOG.info("EditLog upsert record: {}", upsertRecord);
         logEdit(OperationType.OP_UPSERT_TRANSACTION_STATE, transactionState);
     }
 
