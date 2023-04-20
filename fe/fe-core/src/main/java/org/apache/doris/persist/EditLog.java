@@ -1164,6 +1164,7 @@ public class EditLog {
     }
 
     public void logDropPartition(DropPartitionInfo info) {
+        LOG.info("EditLog logDropPartition: {}", info);
         logEdit(OperationType.OP_DROP_PARTITION, info);
     }
 
