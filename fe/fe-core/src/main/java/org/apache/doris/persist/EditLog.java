@@ -1159,6 +1159,7 @@ public class EditLog {
     }
 
     public void logAddPartition(PartitionPersistInfo info) {
+        LOG.info("EditLog logAddPartition: {}", info);
         logEdit(OperationType.OP_ADD_PARTITION, info);
     }
 

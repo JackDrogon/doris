@@ -27,6 +27,7 @@ import org.apache.doris.catalog.ReplicaAllocation;
 import org.apache.doris.common.FeMetaVersion;
 import org.apache.doris.common.io.Writable;
 import org.apache.doris.common.util.RangeUtils;
+import org.apache.doris.persist.gson.GsonUtils;
 
 import com.google.common.collect.Range;
 import com.google.gson.annotations.SerializedName;
@@ -151,6 +152,15 @@ public class PartitionPersistInfo implements Writable {
         if (Env.getCurrentEnvJournalVersion() >= FeMetaVersion.VERSION_115) {
             isMutable = in.readBoolean();
         }
+    }
+
+    public String toJson() {
+        return GsonUtils.GSON.toJson(this);
+    }
+
+    @Override
+    public String toString() {
+        return toJson();
     }
 
     public boolean equals(Object obj) {
