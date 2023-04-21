@@ -300,83 +300,76 @@ Status TxnManager::publish_txn(OlapMeta* meta, TPartitionId partition_id,
     RowsetSharedPtr rowset_ptr = nullptr;
     TabletTxnInfo load_info;
     {
-        {
-            std::unique_lock<std::mutex> txn_rlock(_get_txn_lock(transaction_id));
-            std::shared_lock txn_map_rlock(_get_txn_map_lock(transaction_id));
-            txn_tablet_map_t& txn_tablet_map = _get_txn_tablet_map(transaction_id);
-            auto it = txn_tablet_map.find(key);
-            if (it != txn_tablet_map.end()) {
-                auto load_itr = it->second.find(tablet_info);
-                if (load_itr != it->second.end()) {
-                    // found load for txn,tablet
-                    // case 1: user commit rowset, then the load id must be equal
-                    load_info = load_itr->second;
-                    rowset_ptr = load_info.rowset;
-                }
-            }
-        }
-        // save meta need access disk, it maybe very slow, so that it is not in global txn lock
-        // it is under a single txn lock
-        if (rowset_ptr != nullptr) {
-            // TODO(ygl): rowset is already set version here, memory is changed, if save failed
-            // it maybe a fatal error
-            rowset_ptr->make_visible(version);
-            // update delete_bitmap
-            {
-                if (load_info.unique_key_merge_on_write) {
-                    auto tablet =
-                            StorageEngine::instance()->tablet_manager()->get_tablet(tablet_id);
-                    if (tablet == nullptr) {
-                        return Status::OK();
-                    }
-                    std::unique_ptr<RowsetWriter> rowset_writer;
-                    _create_transient_rowset_writer(tablet, rowset_ptr->rowset_id(),
-                                                    rowset_ptr->num_segments(), &rowset_writer);
-
-                    RETURN_IF_ERROR(tablet->update_delete_bitmap(rowset_ptr, &load_info,
-                                                                 rowset_writer.get()));
-                    if (rowset_ptr->tablet_schema()->is_partial_update()) {
-                        // build rowset writer and merge transient rowset
-                        RETURN_IF_ERROR(rowset_writer->flush());
-                        RowsetSharedPtr transient_rowset = rowset_writer->build();
-                        rowset_ptr->merge_rowset_meta(transient_rowset->rowset_meta());
-
-                        // erase segment cache cause we will add a segment to rowset
-                        SegmentLoader::instance()->erase_segment(rowset_ptr->rowset_id());
-                    }
-                    std::shared_lock rlock(tablet->get_header_lock());
-                    tablet->save_meta();
-                }
-            }
-            Status save_status =
-                    RowsetMetaManager::save(meta, tablet_uid, rowset_ptr->rowset_id(),
-                                            rowset_ptr->rowset_meta()->get_rowset_pb());
-            if (save_status != Status::OK()) {
-                LOG(WARNING) << "save committed rowset failed. when publish txn rowset_id:"
-                             << rowset_ptr->rowset_id() << ", tablet id: " << tablet_id
-                             << ", txn id:" << transaction_id;
-                return Status::Error<ROWSET_SAVE_FAILED>();
-            }
-        } else {
-            return Status::Error<TRANSACTION_NOT_EXIST>();
-        }
-    }
-    {
-        std::unique_lock<std::mutex> txn_lock(_get_txn_lock(transaction_id));
-        std::lock_guard<std::shared_mutex> wrlock(_get_txn_map_lock(transaction_id));
+        std::unique_lock<std::mutex> txn_rlock(_get_txn_lock(transaction_id));
+        std::shared_lock txn_map_rlock(_get_txn_map_lock(transaction_id));
         txn_tablet_map_t& txn_tablet_map = _get_txn_tablet_map(transaction_id);
         auto it = txn_tablet_map.find(key);
         if (it != txn_tablet_map.end()) {
-            it->second.erase(tablet_info);
-            VLOG_NOTICE << "publish txn successfully."
-                        << " partition_id: " << key.first << ", txn_id: " << key.second
-                        << ", tablet: " << tablet_info.to_string()
-                        << ", rowsetid: " << rowset_ptr->rowset_id()
-                        << ", version: " << version.first << "," << version.second;
-            if (it->second.empty()) {
-                txn_tablet_map.erase(it);
-                _clear_txn_partition_map_unlocked(transaction_id, partition_id);
+            auto load_itr = it->second.find(tablet_info);
+            if (load_itr != it->second.end()) {
+                // found load for txn,tablet
+                // case 1: user commit rowset, then the load id must be equal
+                load_info = load_itr->second;
+                rowset_ptr = load_info.rowset;
             }
+        }
+    }
+    // save meta need access disk, it maybe very slow, so that it is not in global txn lock
+    // it is under a single txn lock
+    if (rowset_ptr != nullptr) {
+        // TODO(ygl): rowset is already set version here, memory is changed, if save failed
+        // it maybe a fatal error
+        rowset_ptr->make_visible(version);
+        // update delete_bitmap
+        if (load_info.unique_key_merge_on_write) {
+            auto tablet = StorageEngine::instance()->tablet_manager()->get_tablet(tablet_id);
+            if (tablet == nullptr) {
+                return Status::OK();
+            }
+            std::unique_ptr<RowsetWriter> rowset_writer;
+            _create_transient_rowset_writer(tablet, rowset_ptr->rowset_id(),
+                                            rowset_ptr->num_segments(), &rowset_writer);
+
+            RETURN_IF_ERROR(
+                    tablet->update_delete_bitmap(rowset_ptr, &load_info, rowset_writer.get()));
+            if (rowset_ptr->tablet_schema()->is_partial_update()) {
+                // build rowset writer and merge transient rowset
+                RETURN_IF_ERROR(rowset_writer->flush());
+                RowsetSharedPtr transient_rowset = rowset_writer->build();
+                rowset_ptr->merge_rowset_meta(transient_rowset->rowset_meta());
+
+                // erase segment cache cause we will add a segment to rowset
+                SegmentLoader::instance()->erase_segment(rowset_ptr->rowset_id());
+            }
+            std::shared_lock rlock(tablet->get_header_lock());
+            tablet->save_meta();
+        }
+        Status save_status = RowsetMetaManager::save(meta, tablet_uid, rowset_ptr->rowset_id(),
+                                                     rowset_ptr->rowset_meta()->get_rowset_pb());
+        if (save_status != Status::OK()) {
+            LOG(WARNING) << "save committed rowset failed. when publish txn rowset_id:"
+                         << rowset_ptr->rowset_id() << ", tablet id: " << tablet_id
+                         << ", txn id:" << transaction_id;
+            return Status::Error<ROWSET_SAVE_FAILED>();
+        }
+    } else {
+        return Status::Error<TRANSACTION_NOT_EXIST>();
+    }
+
+    std::unique_lock<std::mutex> txn_lock(_get_txn_lock(transaction_id));
+    std::lock_guard<std::shared_mutex> wrlock(_get_txn_map_lock(transaction_id));
+    txn_tablet_map_t& txn_tablet_map = _get_txn_tablet_map(transaction_id);
+    auto it = txn_tablet_map.find(key);
+    if (it != txn_tablet_map.end()) {
+        it->second.erase(tablet_info);
+        VLOG_NOTICE << "publish txn successfully."
+                    << " partition_id: " << key.first << ", txn_id: " << key.second
+                    << ", tablet: " << tablet_info.to_string()
+                    << ", rowsetid: " << rowset_ptr->rowset_id() << ", version: " << version.first
+                    << "," << version.second;
+        if (it->second.empty()) {
+            txn_tablet_map.erase(it);
+            _clear_txn_partition_map_unlocked(transaction_id, partition_id);
         }
     }
     return Status::OK();
