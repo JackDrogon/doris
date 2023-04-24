@@ -18,6 +18,7 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -53,7 +54,7 @@ public:
 
 private:
     std::string _root_path;
-    rocksdb::DB* _db;
+    std::unique_ptr<rocksdb::DB> _db;
     std::vector<rocksdb::ColumnFamilyHandle*> _handles;
 };
 

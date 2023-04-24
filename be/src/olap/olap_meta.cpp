@@ -34,6 +34,7 @@
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/slice_transform.h"
+#include "util/defer_op.h"
 #include "util/doris_metrics.h"
 #include "util/runtime_profile.h"
 
@@ -54,7 +55,7 @@ using namespace ErrorCode;
 const std::string META_POSTFIX = "/meta";
 const size_t PREFIX_LENGTH = 4;
 
-OlapMeta::OlapMeta(const std::string& root_path) : _root_path(root_path), _db(nullptr) {}
+OlapMeta::OlapMeta(const std::string& root_path) : _root_path(root_path) {}
 
 OlapMeta::~OlapMeta() {
     if (_db != nullptr) {
@@ -71,8 +72,6 @@ OlapMeta::~OlapMeta() {
         if (!s.ok()) {
             LOG(WARNING) << "rocksdb close failed: " << s.ToString();
         }
-        delete _db;
-        _db = nullptr;
         LOG(INFO) << "finish close rocksdb for OlapMeta";
     }
 }
@@ -93,7 +92,10 @@ Status OlapMeta::init() {
     ColumnFamilyOptions meta_column_family;
     meta_column_family.prefix_extractor.reset(NewFixedPrefixTransform(PREFIX_LENGTH));
     column_families.emplace_back(META_COLUMN_FAMILY, meta_column_family);
-    rocksdb::Status s = DB::Open(options, db_path, column_families, &_handles, &_db);
+
+    rocksdb::DB* db;
+    rocksdb::Status s = DB::Open(options, db_path, column_families, &_handles, &db);
+    _db = std::unique_ptr<rocksdb::DB>(db);
     if (!s.ok() || _db == nullptr) {
         LOG(WARNING) << "rocks db open failed, reason:" << s.ToString();
         return Status::Error<META_OPEN_DB_ERROR>();
@@ -138,16 +140,21 @@ bool OlapMeta::key_may_exist(const int column_family_index, const std::string& k
 Status OlapMeta::put(const int column_family_index, const std::string& key,
                      const std::string& value) {
     DorisMetrics::instance()->meta_write_request_total->increment(1);
+
     rocksdb::ColumnFamilyHandle* handle = _handles[column_family_index];
-    int64_t duration_ns = 0;
     rocksdb::Status s;
     {
+        int64_t duration_ns = 0;
+        Defer defer([&] {
+            DorisMetrics::instance()->meta_write_request_duration_us->increment(duration_ns / 1000);
+        });
         SCOPED_RAW_TIMER(&duration_ns);
+
         WriteOptions write_options;
         write_options.sync = config::sync_tablet_meta;
         s = _db->Put(write_options, handle, rocksdb::Slice(key), rocksdb::Slice(value));
     }
-    DorisMetrics::instance()->meta_write_request_duration_us->increment(duration_ns / 1000);
+
     if (!s.ok()) {
         LOG(WARNING) << "rocks db put key:" << key << " failed, reason:" << s.ToString();
         return Status::Error<META_PUT_ERROR>();

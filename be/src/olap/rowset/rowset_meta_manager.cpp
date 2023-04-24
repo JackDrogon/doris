@@ -92,14 +92,12 @@ Status RowsetMetaManager::save(OlapMeta* meta, TabletUid tablet_uid, const Rowse
                                const RowsetMetaPB& rowset_meta_pb) {
     std::string key = ROWSET_PREFIX + tablet_uid.to_string() + "_" + rowset_id.to_string();
     std::string value;
-    bool ret = rowset_meta_pb.SerializeToString(&value);
-    if (!ret) {
-        std::string error_msg = "serialize rowset pb failed. rowset id:" + key;
-        LOG(WARNING) << error_msg;
+    if (!rowset_meta_pb.SerializeToString(&value)) {
+        LOG(WARNING) << "serialize rowset pb failed. rowset id:" << key;
         return Status::Error<SERIALIZE_PROTOBUF_ERROR>();
     }
-    Status status = meta->put(META_COLUMN_FAMILY_INDEX, key, value);
-    return status;
+
+    return meta->put(META_COLUMN_FAMILY_INDEX, key, value);
 }
 
 Status RowsetMetaManager::remove(OlapMeta* meta, TabletUid tablet_uid, const RowsetId& rowset_id) {
