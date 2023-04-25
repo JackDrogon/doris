@@ -31,11 +31,10 @@ class DB;
 
 namespace doris {
 
-class OlapMeta {
+class OlapMeta final {
 public:
     OlapMeta(const std::string& root_path);
-
-    virtual ~OlapMeta();
+    ~OlapMeta();
 
     Status init();
 
@@ -50,12 +49,13 @@ public:
     Status iterate(const int column_family_index, const std::string& prefix,
                    std::function<bool(const std::string&, const std::string&)> const& func);
 
-    std::string get_root_path();
+    std::string get_root_path() const { return _root_path; }
 
 private:
     std::string _root_path;
+    // keep order of _db && _handles, we need destroy _handles before _db
     std::unique_ptr<rocksdb::DB> _db;
-    std::vector<rocksdb::ColumnFamilyHandle*> _handles;
+    std::vector<std::unique_ptr<rocksdb::ColumnFamilyHandle>> _handles;
 };
 
 } // namespace doris

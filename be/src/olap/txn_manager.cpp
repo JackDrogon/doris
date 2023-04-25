@@ -323,7 +323,7 @@ Status TxnManager::publish_txn(OlapMeta* meta, TPartitionId partition_id,
         return Status::Error<TRANSACTION_NOT_EXIST>();
     }
 
-    /// Step 2: save meta
+    /// Step 2: make rowset visible
     // save meta need access disk, it maybe very slow, so that it is not in global txn lock
     // it is under a single txn lock
     // TODO(ygl): rowset is already set version here, memory is changed, if save failed
@@ -353,17 +353,28 @@ Status TxnManager::publish_txn(OlapMeta* meta, TPartitionId partition_id,
         std::shared_lock rlock(tablet->get_header_lock());
         tablet->save_meta();
     }
-    Status save_status = RowsetMetaManager::save(meta, tablet_uid, rowset->rowset_id(),
-                                                 rowset->rowset_meta()->get_rowset_pb());
-    if (save_status != Status::OK()) {
+
+    /// Step 3:  add to binlog
+    auto result = rowset->add_to_binlog();
+    if (!result) {
+        LOG(WARNING) << "add rowset to binlog failed. when publish txn rowset_id:"
+                     << rowset->rowset_id() << ", tablet id: " << tablet_id
+                     << ", txn id:" << transaction_id;
+        return Status::Error<ROWSET_ADD_TO_BINLOG_FAILED>();
+    }
+
+    /// Step 4: save meta
+    auto status = RowsetMetaManager::save(meta, tablet_uid, rowset->rowset_id(),
+                                          rowset->rowset_meta()->get_rowset_pb());
+    if (!status.ok()) {
         LOG(WARNING) << "save committed rowset failed. when publish txn rowset_id:"
                      << rowset->rowset_id() << ", tablet id: " << tablet_id
                      << ", txn id:" << transaction_id;
         return Status::Error<ROWSET_SAVE_FAILED>();
     }
 
-    /// Step 3: remove tablet_info from tnx_tablet_map
-    /// txn_tablet_map[key] empty, remove key from txn_tablet_map
+    /// Step 5: remove tablet_info from tnx_tablet_map
+    // txn_tablet_map[key] empty, remove key from txn_tablet_map
     std::unique_lock<std::mutex> txn_lock(_get_txn_lock(transaction_id));
     std::lock_guard<std::shared_mutex> wrlock(_get_txn_map_lock(transaction_id));
     txn_tablet_map_t& txn_tablet_map = _get_txn_tablet_map(transaction_id);
@@ -379,7 +390,8 @@ Status TxnManager::publish_txn(OlapMeta* meta, TPartitionId partition_id,
             _clear_txn_partition_map_unlocked(transaction_id, partition_id);
         }
     }
-    return Status::OK();
+
+    return status;
 }
 
 // create a rowset writer with rowset_id and seg_id
