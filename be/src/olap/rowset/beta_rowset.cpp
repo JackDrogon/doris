@@ -394,15 +394,15 @@ bool BetaRowset::check_current_rowset_segment() {
     return true;
 }
 
-Result<std::vector<std::string>> BetaRowset::add_to_binlog() {
+Status BetaRowset::add_to_binlog() {
     // FIXME(Drogon): not only local file system
     DCHECK(is_local());
     auto fs = _rowset_meta->fs();
     if (!fs) {
-        return unexpected(Status::Error<INIT_FAILED>());
+        return Status::Error<INIT_FAILED>();
     }
     if (fs->type() != io::FileSystemType::LOCAL) {
-        return unexpected(Status::InternalError("should be local file system"));
+        return Status::InternalError("should be local file system");
     }
     io::LocalFileSystem* local_fs = static_cast<io::LocalFileSystem*>(fs.get());
 
@@ -410,8 +410,6 @@ Result<std::vector<std::string>> BetaRowset::add_to_binlog() {
     std::string binlog_dir;
 
     auto segments_num = num_segments();
-    std::vector<std::string> binlog_files;
-    binlog_files.reserve(segments_num);
     for (int i = 0; i < segments_num; ++i) {
         auto seg_file = segment_file_path(i);
 
@@ -419,9 +417,9 @@ Result<std::vector<std::string>> BetaRowset::add_to_binlog() {
             binlog_dir = std::filesystem::path(seg_file).parent_path().append("_binlog").string();
 
             bool exists = true;
-            RETURN_IF_ERROR_RESULT(local_fs->exists(binlog_dir, &exists));
+            RETURN_IF_ERROR(local_fs->exists(binlog_dir, &exists));
             if (!exists) {
-                RETURN_IF_ERROR_RESULT(local_fs->create_directory(binlog_dir));
+                RETURN_IF_ERROR(local_fs->create_directory(binlog_dir));
             }
         }
 
@@ -432,12 +430,11 @@ Result<std::vector<std::string>> BetaRowset::add_to_binlog() {
         if (!local_fs->link_file(seg_file, binlog_file).ok()) {
             LOG(WARNING) << "fail to create hard link. from=" << seg_file << ", "
                          << "to=" << binlog_file << ", errno=" << Errno::no();
-            return unexpected(Status::Error<OS_ERROR>());
+            return Status::Error<OS_ERROR>();
         }
-        binlog_files.push_back(std::move(binlog_file));
     }
 
-    return binlog_files;
+    return Status::OK();
 }
 
 } // namespace doris

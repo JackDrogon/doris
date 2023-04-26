@@ -93,7 +93,7 @@ public:
 
     Status get_segments_size(std::vector<size_t>* segments_size);
 
-    [[nodiscard]] virtual Result<std::vector<std::string>> add_to_binlog() override;
+    [[nodiscard]] virtual Status add_to_binlog() override;
 
 protected:
     BetaRowset(const TabletSchemaSPtr& schema, const std::string& tablet_path,

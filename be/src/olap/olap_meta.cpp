@@ -19,6 +19,7 @@
 
 #include <rocksdb/iterator.h>
 #include <rocksdb/status.h>
+#include <rocksdb/write_batch.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -165,6 +166,41 @@ Status OlapMeta::put(const int column_family_index, const std::string& key,
 
     if (!s.ok()) {
         LOG(WARNING) << "rocks db put key:" << key << " failed, reason:" << s.ToString();
+        return Status::Error<META_PUT_ERROR>();
+    }
+    return Status::OK();
+}
+
+Status OlapMeta::put(const int column_family_index, const std::vector<BatchEntry>& entries) {
+    DorisMetrics::instance()->meta_write_request_total->increment(1);
+
+    // log all params
+
+    auto* handle = _handles[column_family_index].get();
+    rocksdb::Status s;
+    {
+        int64_t duration_ns = 0;
+        Defer defer([&] {
+            DorisMetrics::instance()->meta_write_request_duration_us->increment(duration_ns / 1000);
+        });
+        SCOPED_RAW_TIMER(&duration_ns);
+
+        // construct write batch
+        rocksdb::WriteBatch write_batch;
+        for (auto entry : entries) {
+            LOG(INFO) << "column_family_index: " << column_family_index << ", key: " << entry.key
+                      << ", value: " << entry.value;
+            write_batch.Put(handle, rocksdb::Slice(entry.key), rocksdb::Slice(entry.value));
+        }
+
+        // write to rocksdb
+        WriteOptions write_options;
+        write_options.sync = config::sync_tablet_meta;
+        s = _db->Write(write_options, &write_batch);
+    }
+
+    if (!s.ok()) {
+        // LOG(WARNING) << "rocks db put key:" << key << " failed, reason:" << s.ToString();
         return Status::Error<META_PUT_ERROR>();
     }
     return Status::OK();

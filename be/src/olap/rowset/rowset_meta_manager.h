@@ -20,6 +20,7 @@
 
 #include <functional>
 #include <string>
+#include <vector>
 
 #include "common/status.h"
 #include "olap/olap_common.h"
@@ -29,8 +30,6 @@ namespace doris {
 class OlapMeta;
 class RowsetMetaPB;
 } // namespace doris
-
-using std::string;
 
 namespace doris {
 
@@ -46,8 +45,11 @@ public:
     static Status get_json_rowset_meta(OlapMeta* meta, TabletUid tablet_uid,
                                        const RowsetId& rowset_id, std::string* json_rowset_meta);
 
+    // TODO(Drogon): refactor save && save_with_binlog to one, adapt to ut temperately
     static Status save(OlapMeta* meta, TabletUid tablet_uid, const RowsetId& rowset_id,
                        const RowsetMetaPB& rowset_meta_pb);
+    static Status save_with_binlog(OlapMeta* meta, TabletUid tablet_uid, const RowsetId& rowset_id,
+                                   const RowsetMetaPB& rowset_meta_pb);
 
     static Status remove(OlapMeta* meta, TabletUid tablet_uid, const RowsetId& rowset_id);
 

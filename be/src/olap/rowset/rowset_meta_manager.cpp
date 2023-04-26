@@ -17,13 +17,16 @@
 
 #include "olap/rowset/rowset_meta_manager.h"
 
+#include <fmt/format.h>
 #include <gen_cpp/olap_file.pb.h>
 
 #include <boost/algorithm/string/trim.hpp>
 #include <fstream>
+#include <functional>
 #include <memory>
 #include <new>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "common/logging.h"
@@ -35,6 +38,7 @@ namespace doris {
 using namespace ErrorCode;
 
 const std::string ROWSET_PREFIX = "rst_";
+constexpr std::string_view kBinlogPrefix = "binglog_";
 
 bool RowsetMetaManager::check_rowset_meta(OlapMeta* meta, TabletUid tablet_uid,
                                           const RowsetId& rowset_id) {
@@ -90,7 +94,8 @@ Status RowsetMetaManager::get_json_rowset_meta(OlapMeta* meta, TabletUid tablet_
 
 Status RowsetMetaManager::save(OlapMeta* meta, TabletUid tablet_uid, const RowsetId& rowset_id,
                                const RowsetMetaPB& rowset_meta_pb) {
-    std::string key = ROWSET_PREFIX + tablet_uid.to_string() + "_" + rowset_id.to_string();
+    std::string key =
+            fmt::format("{}{}_{}", ROWSET_PREFIX, tablet_uid.to_string(), rowset_id.to_string());
     std::string value;
     if (!rowset_meta_pb.SerializeToString(&value)) {
         LOG(WARNING) << "serialize rowset pb failed. rowset id:" << key;
@@ -98,6 +103,48 @@ Status RowsetMetaManager::save(OlapMeta* meta, TabletUid tablet_uid, const Rowse
     }
 
     return meta->put(META_COLUMN_FAMILY_INDEX, key, value);
+}
+
+Status RowsetMetaManager::save_with_binlog(OlapMeta* meta, TabletUid tablet_uid,
+                                           const RowsetId& rowset_id,
+                                           const RowsetMetaPB& rowset_meta_pb) {
+    // create rowset write data
+    std::string rowset_key =
+            fmt::format("{}{}_{}", ROWSET_PREFIX, tablet_uid.to_string(), rowset_id.to_string());
+    std::string rowset_value;
+    if (!rowset_meta_pb.SerializeToString(&rowset_value)) {
+        LOG(WARNING) << "serialize rowset pb failed. rowset id:" << rowset_key;
+        return Status::Error<SERIALIZE_PROTOBUF_ERROR>();
+    }
+
+    // create binlog write data
+    // binlog_key format: {kBinlogPrefix}{tablet_uid}_{version}_{rowset_id}
+    // version is formatted to 20 bytes to avoid the problem of sorting, version is lower, timestamp is lower
+    // binlog key is not supported for cumulative rowset
+    if (rowset_meta_pb.start_version() != rowset_meta_pb.end_version()) {
+        LOG(WARNING) << "binlog key is not supported for cumulative rowset. rowset id:"
+                     << rowset_key;
+        return Status::Error<ROWSET_BINLOG_NOT_ONLY_ONE_VERSION>();
+    }
+    auto version = rowset_meta_pb.start_version();
+    std::string binlog_key = fmt::format("{}{}_{:020d}_{}", kBinlogPrefix, tablet_uid.to_string(),
+                                         version, rowset_id.to_string());
+    BinlogMetaEntryPB binlog_meta_entry_pb;
+    binlog_meta_entry_pb.set_version(version);
+    binlog_meta_entry_pb.set_tablet_id(rowset_meta_pb.tablet_id());
+    binlog_meta_entry_pb.set_rowset_id(rowset_meta_pb.rowset_id());
+    binlog_meta_entry_pb.set_creation_time(rowset_meta_pb.creation_time());
+    std::string binlog_value;
+    if (!binlog_meta_entry_pb.SerializeToString(&binlog_value)) {
+        LOG(WARNING) << "serialize binlog pb failed. rowset id:" << binlog_key;
+        return Status::Error<SERIALIZE_PROTOBUF_ERROR>();
+    }
+
+    // create batch entries
+    std::vector<OlapMeta::BatchEntry> entries = {{std::cref(rowset_key), std::cref(rowset_value)},
+                                                 {std::cref(binlog_key), std::cref(binlog_value)}};
+
+    return meta->put(META_COLUMN_FAMILY_INDEX, entries);
 }
 
 Status RowsetMetaManager::remove(OlapMeta* meta, TabletUid tablet_uid, const RowsetId& rowset_id) {

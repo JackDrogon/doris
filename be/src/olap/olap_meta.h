@@ -33,6 +33,15 @@ namespace doris {
 
 class OlapMeta final {
 public:
+    struct BatchEntry {
+        const std::string& key;
+        const std::string& value;
+
+        BatchEntry(const std::string& key_arg, const std::string& value_arg)
+                : key(key_arg), value(value_arg) {}
+    };
+
+public:
     OlapMeta(const std::string& root_path);
     ~OlapMeta();
 
@@ -43,6 +52,7 @@ public:
     bool key_may_exist(const int column_family_index, const std::string& key, std::string* value);
 
     Status put(const int column_family_index, const std::string& key, const std::string& value);
+    Status put(const int column_family_index, const std::vector<BatchEntry>& entries);
 
     Status remove(const int column_family_index, const std::string& key);
 

@@ -290,9 +290,7 @@ public:
 
     bool check_rowset_segment();
 
-    [[nodiscard]] virtual Result<std::vector<std::string>> add_to_binlog() {
-        return unexpected(Status::OK());
-    }
+    [[nodiscard]] virtual Status add_to_binlog() { return Status::OK(); }
 
 protected:
     friend class RowsetFactory;

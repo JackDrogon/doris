@@ -355,8 +355,8 @@ Status TxnManager::publish_txn(OlapMeta* meta, TPartitionId partition_id,
     }
 
     /// Step 3:  add to binlog
-    auto result = rowset->add_to_binlog();
-    if (!result) {
+    auto status = rowset->add_to_binlog();
+    if (!status.ok()) {
         LOG(WARNING) << "add rowset to binlog failed. when publish txn rowset_id:"
                      << rowset->rowset_id() << ", tablet id: " << tablet_id
                      << ", txn id:" << transaction_id;
@@ -364,8 +364,8 @@ Status TxnManager::publish_txn(OlapMeta* meta, TPartitionId partition_id,
     }
 
     /// Step 4: save meta
-    auto status = RowsetMetaManager::save(meta, tablet_uid, rowset->rowset_id(),
-                                          rowset->rowset_meta()->get_rowset_pb());
+    status = RowsetMetaManager::save_with_binlog(meta, tablet_uid, rowset->rowset_id(),
+                                                 rowset->rowset_meta()->get_rowset_pb());
     if (!status.ok()) {
         LOG(WARNING) << "save committed rowset failed. when publish txn rowset_id:"
                      << rowset->rowset_id() << ", tablet id: " << tablet_id

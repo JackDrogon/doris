@@ -313,3 +313,10 @@ message DeleteBitmapPB {
     // Serialized roaring bitmaps indexed with {rowset_id, segment_id, version}
     repeated bytes segment_delete_bitmaps = 4;
 }
+
+message BinlogMetaEntryPB {
+    required int64 version = 1;
+    required int64 tablet_id = 2;
+    required int64 rowset_id = 3;
+    required int64 creation_time = 4;
+}
