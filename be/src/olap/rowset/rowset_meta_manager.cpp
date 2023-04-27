@@ -118,7 +118,8 @@ Status RowsetMetaManager::save_with_binlog(OlapMeta* meta, TabletUid tablet_uid,
     }
 
     // create binlog write data
-    // binlog_key format: {kBinlogPrefix}{tablet_uid}_{version}_{rowset_id}
+    // binlog_meta_key format: {kBinlogPrefix}meta_{tablet_uid}_{version}_{rowset_id}
+    // binlog_data_key format: {kBinlogPrefix}data_{tablet_uid}_{version}_{rowset_id}
     // version is formatted to 20 bytes to avoid the problem of sorting, version is lower, timestamp is lower
     // binlog key is not supported for cumulative rowset
     if (rowset_meta_pb.start_version() != rowset_meta_pb.end_version()) {
@@ -127,22 +128,28 @@ Status RowsetMetaManager::save_with_binlog(OlapMeta* meta, TabletUid tablet_uid,
         return Status::Error<ROWSET_BINLOG_NOT_ONLY_ONE_VERSION>();
     }
     auto version = rowset_meta_pb.start_version();
-    std::string binlog_key = fmt::format("{}{}_{:020d}_{}", kBinlogPrefix, tablet_uid.to_string(),
-                                         version, rowset_id.to_string());
+    std::string binlog_meta_key =
+            fmt::format("{}meta_{}_{:020d}_{}", kBinlogPrefix, tablet_uid.to_string(), version,
+                        rowset_id.to_string());
+    std::string binlog_data_key =
+            fmt::format("{}data_{}_{:020d}_{}", kBinlogPrefix, tablet_uid.to_string(), version,
+                        rowset_id.to_string());
     BinlogMetaEntryPB binlog_meta_entry_pb;
     binlog_meta_entry_pb.set_version(version);
     binlog_meta_entry_pb.set_tablet_id(rowset_meta_pb.tablet_id());
     binlog_meta_entry_pb.set_rowset_id(rowset_meta_pb.rowset_id());
     binlog_meta_entry_pb.set_creation_time(rowset_meta_pb.creation_time());
-    std::string binlog_value;
-    if (!binlog_meta_entry_pb.SerializeToString(&binlog_value)) {
-        LOG(WARNING) << "serialize binlog pb failed. rowset id:" << binlog_key;
+    std::string binlog_meta_value;
+    if (!binlog_meta_entry_pb.SerializeToString(&binlog_meta_value)) {
+        LOG(WARNING) << "serialize binlog pb failed. rowset id:" << binlog_meta_key;
         return Status::Error<SERIALIZE_PROTOBUF_ERROR>();
     }
 
     // create batch entries
-    std::vector<OlapMeta::BatchEntry> entries = {{std::cref(rowset_key), std::cref(rowset_value)},
-                                                 {std::cref(binlog_key), std::cref(binlog_value)}};
+    std::vector<OlapMeta::BatchEntry> entries = {
+            {std::cref(rowset_key), std::cref(rowset_value)},
+            {std::cref(binlog_meta_key), std::cref(binlog_meta_value)},
+            {std::cref(binlog_data_key), std::cref(rowset_value)}};
 
     return meta->put(META_COLUMN_FAMILY_INDEX, entries);
 }
