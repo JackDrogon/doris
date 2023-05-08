@@ -3191,4 +3191,16 @@ bool Tablet::should_skip_compaction(CompactionType compaction_type, int64_t now)
     return false;
 }
 
+std::vector<std::string> Tablet::get_binlog_filepath(std::string_view binlog_version) const {
+    // TODO(Drogon): rewrite by filesystem path
+    LOG(INFO) << "tablet path: " << _tablet_path;
+    auto binlog_filenames = RowsetMetaManager::get_binlog_filenames(_data_dir->get_meta(),
+                                                                    tablet_uid(), binlog_version);
+    std::vector<std::string> binlog_filepath;
+    for (auto& binlog_filename : binlog_filenames) {
+        binlog_filepath.emplace_back(fmt::format("{}/_binlog/{}", _tablet_path, binlog_filename));
+    }
+    return binlog_filepath;
+}
+
 } // namespace doris

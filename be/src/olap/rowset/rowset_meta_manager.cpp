@@ -35,10 +35,38 @@
 #include "olap/utils.h"
 
 namespace doris {
-using namespace ErrorCode;
-
+namespace {
 const std::string ROWSET_PREFIX = "rst_";
 constexpr std::string_view kBinlogPrefix = "binglog_";
+
+inline auto make_binlog_meta_key(std::string_view tablet, int64_t version,
+                                 std::string_view rowset) {
+    return fmt::format("{}meta_{}_{:020d}_{}", kBinlogPrefix, tablet, version, rowset);
+}
+
+inline auto make_binlog_meta_key(const TabletUid& tablet_uid, int64_t version,
+                                 const RowsetId& rowset_id) {
+    return make_binlog_meta_key(tablet_uid.to_string(), version, rowset_id.to_string());
+}
+
+inline auto make_binlog_data_key(std::string_view tablet, int64_t version,
+                                 std::string_view rowset) {
+    return fmt::format("{}data_{}_{:020d}_{}", kBinlogPrefix, tablet, version, rowset);
+}
+
+inline auto make_binlog_data_key(const TabletUid& tablet_uid, int64_t version,
+                                 const RowsetId& rowset_id) {
+    return make_binlog_data_key(tablet_uid.to_string(), version, rowset_id.to_string());
+}
+
+inline auto make_binlog_filename_key(const TabletUid& tablet_uid, std::string_view version) {
+    // TODO(Drogon): use fmt::format not convert to version_num, only string with length prefix '0'
+    int64_t version_num = std::atoll(version.data());
+    return fmt::format("{}meta_{}_{:020d}_", kBinlogPrefix, tablet_uid.to_string(), version_num);
+}
+} // namespace
+
+using namespace ErrorCode;
 
 bool RowsetMetaManager::check_rowset_meta(OlapMeta* meta, TabletUid tablet_uid,
                                           const RowsetId& rowset_id) {
@@ -128,16 +156,13 @@ Status RowsetMetaManager::save_with_binlog(OlapMeta* meta, TabletUid tablet_uid,
         return Status::Error<ROWSET_BINLOG_NOT_ONLY_ONE_VERSION>();
     }
     auto version = rowset_meta_pb.start_version();
-    std::string binlog_meta_key =
-            fmt::format("{}meta_{}_{:020d}_{}", kBinlogPrefix, tablet_uid.to_string(), version,
-                        rowset_id.to_string());
-    std::string binlog_data_key =
-            fmt::format("{}data_{}_{:020d}_{}", kBinlogPrefix, tablet_uid.to_string(), version,
-                        rowset_id.to_string());
+    std::string binlog_meta_key = make_binlog_meta_key(tablet_uid, version, rowset_id);
+    std::string binlog_data_key = make_binlog_data_key(tablet_uid, version, rowset_id);
     BinlogMetaEntryPB binlog_meta_entry_pb;
     binlog_meta_entry_pb.set_version(version);
     binlog_meta_entry_pb.set_tablet_id(rowset_meta_pb.tablet_id());
     binlog_meta_entry_pb.set_rowset_id(rowset_meta_pb.rowset_id());
+    binlog_meta_entry_pb.set_num_segments(rowset_meta_pb.num_segments());
     binlog_meta_entry_pb.set_creation_time(rowset_meta_pb.creation_time());
     std::string binlog_meta_value;
     if (!binlog_meta_entry_pb.SerializeToString(&binlog_meta_value)) {
@@ -152,6 +177,53 @@ Status RowsetMetaManager::save_with_binlog(OlapMeta* meta, TabletUid tablet_uid,
             {std::cref(binlog_data_key), std::cref(rowset_value)}};
 
     return meta->put(META_COLUMN_FAMILY_INDEX, entries);
+}
+
+std::vector<std::string> RowsetMetaManager::get_binlog_filenames(OlapMeta* meta,
+                                                                 TabletUid tablet_uid,
+                                                                 std::string_view binlog_version) {
+    auto prefix_key = make_binlog_filename_key(tablet_uid, binlog_version);
+    LOG(INFO) << fmt::format("prefix_key:{}", prefix_key);
+
+    std::vector<std::string> binlog_files;
+    std::string segment_prefix;
+    int64_t num_segments = 0;
+    auto traverse_func = [&segment_prefix, &num_segments](const std::string& key,
+                                                          const std::string& value) -> bool {
+        LOG(INFO) << fmt::format("key:{}, value:{}", key, value);
+        // key is 'binglog_meta_6943f1585fe834b5-e542c2b83a21d0b7_00000000000000000069_020000000000000135449d7cd7eadfe672aa0f928fa99593', extract last part '020000000000000135449d7cd7eadfe672aa0f928fa99593'
+        auto pos = key.rfind("_");
+        if (pos == std::string::npos) {
+            LOG(WARNING) << fmt::format("invalid binlog meta key:{}", key);
+            return false;
+        }
+        segment_prefix = key.substr(pos + 1);
+
+        BinlogMetaEntryPB binlog_meta_entry_pb;
+        binlog_meta_entry_pb.ParseFromString(value);
+        num_segments = binlog_meta_entry_pb.num_segments();
+
+        return false;
+    };
+    LOG(INFO) << "result:" << segment_prefix;
+
+    // get binlog meta by prefix
+    Status status = meta->iterate(META_COLUMN_FAMILY_INDEX, prefix_key, traverse_func);
+    if (!status.ok() || segment_prefix.empty() || num_segments == 0) {
+        LOG(WARNING) << fmt::format(
+                "fail to get binlog filename. tablet uid:{}, binlog version:{}, status:{}, "
+                "segment_prefix:{}, num_segments:{}",
+                tablet_uid.to_string(), binlog_version, status.to_string(), segment_prefix,
+                num_segments);
+    }
+
+    // construct binlog_files list
+    for (int64_t i = 0; i < num_segments; ++i) {
+        // TODO(Drogon): Update to filesystem path
+        auto segment_file = fmt::format("{}_{}.dat", segment_prefix, i);
+        binlog_files.emplace_back(std::move(segment_file));
+    }
+    return binlog_files;
 }
 
 Status RowsetMetaManager::remove(OlapMeta* meta, TabletUid tablet_uid, const RowsetId& rowset_id) {

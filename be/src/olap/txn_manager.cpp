@@ -17,6 +17,8 @@
 
 #include "txn_manager.h"
 
+#include <fmt/format.h>
+#include <fmt/ranges.h>
 #include <thrift/protocol/TDebugProtocol.h>
 #include <time.h>
 
@@ -372,6 +374,11 @@ Status TxnManager::publish_txn(OlapMeta* meta, TPartitionId partition_id,
                      << ", txn id:" << transaction_id;
         return Status::Error<ROWSET_SAVE_FAILED>();
     }
+
+    // TODO(Drogon): remove these test codes
+    auto tablet = StorageEngine::instance()->tablet_manager()->get_tablet(tablet_id);
+    auto version_str = fmt::format("{}", version.first);
+    LOG(INFO) << fmt::format("{}", tablet->get_binlog_filepath(version_str));
 
     /// Step 5: remove tablet_info from tnx_tablet_map
     // txn_tablet_map[key] empty, remove key from txn_tablet_map

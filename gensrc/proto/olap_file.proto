@@ -318,5 +318,6 @@ message BinlogMetaEntryPB {
     required int64 version = 1;
     required int64 tablet_id = 2;
     required int64 rowset_id = 3;
-    required int64 creation_time = 4;
+    required int64 num_segments = 4;
+    required int64 creation_time = 5;
 }

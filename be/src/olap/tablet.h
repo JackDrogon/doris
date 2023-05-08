@@ -32,6 +32,7 @@
 #include <set>
 #include <shared_mutex>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -474,6 +475,8 @@ public:
             visitor(rs);
         }
     }
+
+    std::vector<std::string> get_binlog_filepath(std::string_view binlog_version) const;
 
     inline void increase_io_error_times() { ++_io_error_times; }
 

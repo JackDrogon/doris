@@ -239,6 +239,7 @@ Status OlapMeta::iterate(const int column_family_index, const std::string& prefi
         LOG(WARNING) << "rocksdb seek failed. reason:" << status.ToString();
         return Status::Error<META_ITERATOR_ERROR>();
     }
+
     for (; it->Valid(); it->Next()) {
         if (prefix != "") {
             if (!it->key().starts_with(prefix)) {
@@ -256,6 +257,7 @@ Status OlapMeta::iterate(const int column_family_index, const std::string& prefi
         LOG(WARNING) << "rocksdb iterator failed. reason:" << status.ToString();
         return Status::Error<META_ITERATOR_ERROR>();
     }
+
     return Status::OK();
 }
 
