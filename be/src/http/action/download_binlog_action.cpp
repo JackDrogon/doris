@@ -18,6 +18,7 @@
 #include "http/action/download_binlog_action.h"
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #include <stdexcept>
 #include <string_view>
@@ -37,7 +38,6 @@
 namespace doris {
 
 namespace {
-const std::string FILE_PARAMETER = "file";
 const std::string kTokenParameter = "token";
 const std::string kTabletIdParameter = "tablet_id";
 const std::string kBinlogVersion = "binlog_version";
@@ -110,7 +110,9 @@ void DownloadBinlogAction::handle(HttpRequest* req) {
     //     LOG(WARNING) << "file not exist, file path: " << binlog_file_path;
     //     return;
     // }
-    do_file_response(binlog_file_path[0], req);
+    // do_file_response(binlog_file_path[0], req);
+    auto binlog_files_msg = fmt::format("{}", fmt::join(binlog_file_path, "\n"));
+    HttpChannel::send_reply(req, binlog_files_msg);
 
     VLOG_CRITICAL << "deal with download binlog file request finished! ";
 }
