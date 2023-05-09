@@ -3191,14 +3191,28 @@ bool Tablet::should_skip_compaction(CompactionType compaction_type, int64_t now)
     return false;
 }
 
+std::pair<std::string, int64_t> Tablet::get_binlog_info(std::string_view binlog_version) const {
+    return RowsetMetaManager::get_binlog_info(_data_dir->get_meta(), tablet_uid(), binlog_version);
+}
+
+std::string Tablet::get_binlog_rowset_meta(std::string_view binlog_version,
+                                           std::string_view rowset_id) const {
+    return RowsetMetaManager::get_binlog_rowset_meta(_data_dir->get_meta(), tablet_uid(),
+                                                     binlog_version, rowset_id);
+}
+
+std::string Tablet::get_segment_filepath(std::string_view rowset_id,
+                                         std::string_view segment_index) const {
+    return fmt::format("{}/_binlog/{}_{}.dat", _tablet_path, rowset_id, segment_index);
+}
+
 std::vector<std::string> Tablet::get_binlog_filepath(std::string_view binlog_version) const {
-    // TODO(Drogon): rewrite by filesystem path
-    LOG(INFO) << "tablet path: " << _tablet_path;
-    auto binlog_filenames = RowsetMetaManager::get_binlog_filenames(_data_dir->get_meta(),
-                                                                    tablet_uid(), binlog_version);
+    const auto& [rowset_id, num_segments] = get_binlog_info(binlog_version);
     std::vector<std::string> binlog_filepath;
-    for (auto& binlog_filename : binlog_filenames) {
-        binlog_filepath.emplace_back(fmt::format("{}/_binlog/{}", _tablet_path, binlog_filename));
+    for (int i = 0; i < num_segments; ++i) {
+        // TODO(Drogon): rewrite by filesystem path
+        auto segment_file = fmt::format("{}_{}.dat", rowset_id, i);
+        binlog_filepath.emplace_back(fmt::format("{}/_binlog/{}", _tablet_path, segment_file));
     }
     return binlog_filepath;
 }

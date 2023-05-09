@@ -18,9 +18,11 @@
 #ifndef DORIS_BE_SRC_OLAP_ROWSET_ROWSET_META_MANAGER_H
 #define DORIS_BE_SRC_OLAP_ROWSET_ROWSET_META_MANAGER_H
 
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "common/status.h"
@@ -52,7 +54,13 @@ public:
     static Status save_with_binlog(OlapMeta* meta, TabletUid tablet_uid, const RowsetId& rowset_id,
                                    const RowsetMetaPB& rowset_meta_pb);
     static std::vector<std::string> get_binlog_filenames(OlapMeta* meta, TabletUid tablet_uid,
-                                                         std::string_view binlog_version);
+                                                         std::string_view binlog_version,
+                                                         int64_t segment_idx);
+    static std::pair<std::string, int64_t> get_binlog_info(OlapMeta* meta, TabletUid tablet_uid,
+                                                           std::string_view binlog_version);
+    static std::string get_binlog_rowset_meta(OlapMeta* meta, TabletUid tablet_uid,
+                                              std::string_view binlog_version,
+                                              std::string_view rowset_id);
 
     static Status remove(OlapMeta* meta, TabletUid tablet_uid, const RowsetId& rowset_id);
 

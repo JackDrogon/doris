@@ -477,6 +477,11 @@ public:
     }
 
     std::vector<std::string> get_binlog_filepath(std::string_view binlog_version) const;
+    std::pair<std::string, int64_t> get_binlog_info(std::string_view binlog_version) const;
+    std::string get_binlog_rowset_meta(std::string_view binlog_version,
+                                       std::string_view rowset_id) const;
+    std::string get_segment_filepath(std::string_view rowset_id,
+                                     std::string_view segment_index) const;
 
     inline void increase_io_error_times() { ++_io_error_times; }
 

@@ -20,6 +20,7 @@
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
+#include <cstdint>
 #include <stdexcept>
 #include <string_view>
 #include <vector>
@@ -38,9 +39,12 @@
 namespace doris {
 
 namespace {
+const std::string kMethodParameter = "method";
 const std::string kTokenParameter = "token";
 const std::string kTabletIdParameter = "tablet_id";
-const std::string kBinlogVersion = "binlog_version";
+const std::string kBinlogVersionParameter = "binlog_version";
+const std::string kSegmentPrefixParameter = "rowset_id";
+const std::string kSegmentIndexParameter = "segment_index";
 
 // get http param, if no value throw exception
 const auto& get_http_param(HttpRequest* req, const std::string& param_name) {
@@ -52,9 +56,9 @@ const auto& get_http_param(HttpRequest* req, const std::string& param_name) {
     return param;
 }
 
-std::vector<std::string> get_binlog_filepath(std::string_view tablet_id_str,
-                                             std::string_view binlog_version) {
+auto get_tablet(const std::string& tablet_id_str) {
     int64_t tablet_id = std::atoll(tablet_id_str.data());
+
     TabletSharedPtr tablet = StorageEngine::instance()->tablet_manager()->get_tablet(tablet_id);
     if (tablet == nullptr) {
         auto error = fmt::format("tablet is not exist, tablet_id={}", tablet_id);
@@ -62,8 +66,77 @@ std::vector<std::string> get_binlog_filepath(std::string_view tablet_id_str,
         throw std::runtime_error(error);
     }
 
-    return tablet->get_binlog_filepath(binlog_version);
+    return tablet;
 }
+
+void handle_get_binlog_info(HttpRequest* req) {
+    try {
+        const auto& binlog_version = get_http_param(req, kBinlogVersionParameter);
+        const auto& tablet_id = get_http_param(req, kTabletIdParameter);
+        auto tablet = get_tablet(tablet_id);
+
+        const auto& [rowset_id, num_segments] = tablet->get_binlog_info(binlog_version);
+        auto binlog_info_msg = fmt::format("{}:{}", rowset_id, num_segments);
+        HttpChannel::send_reply(req, binlog_info_msg);
+    } catch (const std::exception& e) {
+        HttpChannel::send_reply(req, e.what());
+        LOG(WARNING) << "get binlog info failed, error: " << e.what();
+        return;
+    }
+}
+
+/// handle get segment file, need tablet_id, segment prefix && index
+void handle_get_segment_file(HttpRequest* req) {
+    // Step 1: get download file path
+    std::string segment_file_path;
+    try {
+        const auto& tablet_id = get_http_param(req, kTabletIdParameter);
+        auto tablet = get_tablet(tablet_id);
+        const auto& rowset_id = get_http_param(req, kSegmentPrefixParameter);
+        const auto& segment_index = get_http_param(req, kSegmentIndexParameter);
+        segment_file_path = tablet->get_segment_filepath(rowset_id, segment_index);
+    } catch (const std::exception& e) {
+        HttpChannel::send_reply(req, e.what());
+        LOG(WARNING) << "get download file path failed, error: " << e.what();
+        return;
+    }
+
+    // Step 2: handle download
+    // check file exists
+    bool exists = false;
+    Status status = io::global_local_filesystem()->exists(segment_file_path, &exists);
+    if (!status.ok()) {
+        HttpChannel::send_reply(req, status.to_string());
+        LOG(WARNING) << "check file exists failed, error: " << status.to_string();
+        return;
+    }
+    if (!exists) {
+        HttpChannel::send_reply(req, "file not exist.");
+        LOG(WARNING) << "file not exist, file path: " << segment_file_path;
+        return;
+    }
+    do_file_response(segment_file_path, req);
+}
+
+void handle_get_rowset_meta(HttpRequest* req) {
+    try {
+        const auto& tablet_id = get_http_param(req, kTabletIdParameter);
+        auto tablet = get_tablet(tablet_id);
+        const auto& rowset_id = get_http_param(req, kSegmentPrefixParameter);
+        const auto& binlog_version = get_http_param(req, kBinlogVersionParameter);
+        auto rowset_meta = tablet->get_binlog_rowset_meta(binlog_version, rowset_id);
+        if (rowset_meta.empty()) {
+            // TODO(Drogon): send error
+            HttpChannel::send_reply(req, fmt::format("get rowset meta failed, rowset_id={}", rowset_id));
+        } else {
+            HttpChannel::send_reply(req, rowset_meta);
+        }
+    } catch (const std::exception& e) {
+        HttpChannel::send_reply(req, e.what());
+        LOG(WARNING) << "get download file path failed, error: " << e.what();
+    }
+}
+
 } // namespace
 
 DownloadBinlogAction::DownloadBinlogAction(ExecEnv* exec_env) : _exec_env(exec_env) {}
@@ -82,39 +155,21 @@ void DownloadBinlogAction::handle(HttpRequest* req) {
         }
     }
 
-    // Step 2: get download file path
-    // Get 'file' parameter, then assembly file absolute path
-    std::vector<std::string> binlog_file_path;
-    try {
-        const auto& tablet_id = get_http_param(req, kTabletIdParameter);
-        const auto& binlog_version = get_http_param(req, kBinlogVersion);
+    // Step 2: get method
+    const std::string& method = req->param(kMethodParameter);
 
-        binlog_file_path = get_binlog_filepath(tablet_id, binlog_version);
-    } catch (const std::exception& e) {
-        HttpChannel::send_reply(req, e.what());
-        LOG(WARNING) << "get download file path failed, error: " << e.what();
-        return;
+    // Step 3: dispatch
+    if (method == "get_binlog_info") {
+        handle_get_binlog_info(req);
+    } else if (method == "get_segment_file") {
+        handle_get_segment_file(req);
+    } else if (method == "get_rowset_meta") {
+        handle_get_rowset_meta(req);
+    } else {
+        auto error_msg = fmt::format("invalid method: {}", method);
+        LOG(WARNING) << error_msg;
+        HttpChannel::send_reply(req, error_msg);
     }
-
-    // Step 3: handle download
-    // check file exists
-    // bool exists = false;
-    // status = io::global_local_filesystem()->exists(binlog_file_path, &exists);
-    // if (!status.ok()) {
-    //     HttpChannel::send_reply(req, status.to_string());
-    //     LOG(WARNING) << "check file exists failed, error: " << status.to_string();
-    //     return;
-    // }
-    // if (!exists) {
-    //     HttpChannel::send_reply(req, "file not exist.");
-    //     LOG(WARNING) << "file not exist, file path: " << binlog_file_path;
-    //     return;
-    // }
-    // do_file_response(binlog_file_path[0], req);
-    auto binlog_files_msg = fmt::format("{}", fmt::join(binlog_file_path, "\n"));
-    HttpChannel::send_reply(req, binlog_files_msg);
-
-    VLOG_CRITICAL << "deal with download binlog file request finished! ";
 }
 
 Status DownloadBinlogAction::_check_token(HttpRequest* req) {
