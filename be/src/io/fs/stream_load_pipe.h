@@ -39,7 +39,7 @@ namespace doris {
 namespace io {
 class IOContext;
 
-const size_t kMaxPipeBufferedBytes = 4 * 1024 * 1024;
+static inline constexpr size_t kMaxPipeBufferedBytes = 4 * 1024 * 1024;
 
 class StreamLoadPipe : public MessageBodySink, public FileReader {
 public:
