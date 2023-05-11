@@ -216,42 +216,46 @@ Status TxnManager::commit_txn(OlapMeta* meta, TPartitionId partition_id,
     }
 
     std::unique_lock<std::mutex> txn_lock(_get_txn_lock(transaction_id));
-    {
+    // this while loop just run only once, just for if break
+    while (true) {
         // get tx
         std::shared_lock rdlock(_get_txn_map_lock(transaction_id));
         txn_tablet_map_t& txn_tablet_map = _get_txn_tablet_map(transaction_id);
         auto it = txn_tablet_map.find(key);
-        if (it != txn_tablet_map.end()) {
-            auto load_itr = it->second.find(tablet_info);
-            if (load_itr != it->second.end()) {
-                // found load for txn,tablet
-                // case 1: user commit rowset, then the load id must be equal
-                TabletTxnInfo& load_info = load_itr->second;
-                // check if load id is equal
-                if (load_info.load_id.hi() == load_id.hi() &&
-                    load_info.load_id.lo() == load_id.lo() && load_info.rowset != nullptr &&
-                    load_info.rowset->rowset_id() == rowset_ptr->rowset_id()) {
-                    // find a rowset with same rowset id, then it means a duplicate call
-                    LOG(INFO) << "find rowset exists when commit transaction to engine."
-                              << "partition_id: " << key.first << ", transaction_id: " << key.second
-                              << ", tablet: " << tablet_info.to_string()
-                              << ", rowset_id: " << load_info.rowset->rowset_id();
-                    return Status::OK();
-                } else if (load_info.load_id.hi() == load_id.hi() &&
-                           load_info.load_id.lo() == load_id.lo() && load_info.rowset != nullptr &&
-                           load_info.rowset->rowset_id() != rowset_ptr->rowset_id()) {
-                    // find a rowset with different rowset id, then it should not happen, just return errors
-                    LOG(WARNING) << "find rowset exists when commit transaction to engine. but "
-                                    "rowset ids "
-                                    "are not same."
-                                 << "partition_id: " << key.first
-                                 << ", transaction_id: " << key.second
-                                 << ", tablet: " << tablet_info.to_string()
-                                 << ", exist rowset_id: " << load_info.rowset->rowset_id()
-                                 << ", new rowset_id: " << rowset_ptr->rowset_id();
-                    return Status::Error<PUSH_TRANSACTION_ALREADY_EXIST>();
-                }
-            }
+        if (it == txn_tablet_map.end()) {
+            break;
+        }
+
+        auto load_itr = it->second.find(tablet_info);
+        if (load_itr == it->second.end()) {
+            break;
+        }
+
+        // found load for txn,tablet
+        // case 1: user commit rowset, then the load id must be equal
+        TabletTxnInfo& load_info = load_itr->second;
+        // check if load id is equal
+        if (load_info.load_id.hi() == load_id.hi() && load_info.load_id.lo() == load_id.lo() &&
+            load_info.rowset != nullptr &&
+            load_info.rowset->rowset_id() == rowset_ptr->rowset_id()) {
+            // find a rowset with same rowset id, then it means a duplicate call
+            LOG(INFO) << "find rowset exists when commit transaction to engine."
+                      << "partition_id: " << key.first << ", transaction_id: " << key.second
+                      << ", tablet: " << tablet_info.to_string()
+                      << ", rowset_id: " << load_info.rowset->rowset_id();
+            return Status::OK();
+        } else if (load_info.load_id.hi() == load_id.hi() &&
+                   load_info.load_id.lo() == load_id.lo() && load_info.rowset != nullptr &&
+                   load_info.rowset->rowset_id() != rowset_ptr->rowset_id()) {
+            // find a rowset with different rowset id, then it should not happen, just return errors
+            LOG(WARNING) << "find rowset exists when commit transaction to engine. but "
+                            "rowset ids "
+                            "are not same."
+                         << "partition_id: " << key.first << ", transaction_id: " << key.second
+                         << ", tablet: " << tablet_info.to_string()
+                         << ", exist rowset_id: " << load_info.rowset->rowset_id()
+                         << ", new rowset_id: " << rowset_ptr->rowset_id();
+            return Status::Error<PUSH_TRANSACTION_ALREADY_EXIST>();
         }
     }
 
