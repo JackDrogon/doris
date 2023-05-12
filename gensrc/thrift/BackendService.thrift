@@ -121,6 +121,19 @@ struct TCheckStorageFormatResult {
     2: optional list<i64> v2_tablets;
 }
 
+struct TIngestBinlogRequest {
+    1: required i64 txn_id;
+    2: required i64 remote_tablet_id;
+    3: required i64 binlog_version;
+    4: required string remote_host;
+    5: required string remote_port;
+    6: required i64 local_tablet_id;
+}
+
+struct TIngestBinlogResult {
+    1: required Status.TStatus status;
+}
+
 service BackendService {
     // Called by coord to start asynchronous execution of plan fragment in backend.
     // Returns as soon as all incoming data streams have been set up.
@@ -174,4 +187,6 @@ service BackendService {
 
     // check tablet rowset type
     TCheckStorageFormatResult check_storage_format();
+
+    TIngestBinlogResult ingest_binlog(1: TIngestBinlogRequest ingest_binlog_request);
 }

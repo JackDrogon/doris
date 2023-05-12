@@ -112,6 +112,8 @@ Status HttpService::start() {
     DownloadBinlogAction* download_binlog_action = _pool.add(new DownloadBinlogAction(_env));
     _ev_http_server->register_handler(HttpMethod::GET, "/api/_binlog/_download",
                                       download_binlog_action);
+    _ev_http_server->register_handler(HttpMethod::HEAD, "/api/_binlog/_download",
+                                      download_binlog_action);
 
     // Register BE version action
     VersionAction* version_action =

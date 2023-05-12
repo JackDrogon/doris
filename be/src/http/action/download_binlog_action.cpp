@@ -43,7 +43,7 @@ const std::string kMethodParameter = "method";
 const std::string kTokenParameter = "token";
 const std::string kTabletIdParameter = "tablet_id";
 const std::string kBinlogVersionParameter = "binlog_version";
-const std::string kSegmentPrefixParameter = "rowset_id";
+const std::string kRowsetIdParameter = "rowset_id";
 const std::string kSegmentIndexParameter = "segment_index";
 
 // get http param, if no value throw exception
@@ -69,6 +69,7 @@ auto get_tablet(const std::string& tablet_id_str) {
     return tablet;
 }
 
+// need binlog_version, tablet_id
 void handle_get_binlog_info(HttpRequest* req) {
     try {
         const auto& binlog_version = get_http_param(req, kBinlogVersionParameter);
@@ -85,14 +86,14 @@ void handle_get_binlog_info(HttpRequest* req) {
     }
 }
 
-/// handle get segment file, need tablet_id, segment prefix && index
+/// handle get segment file, need tablet_id, rowset_id && index
 void handle_get_segment_file(HttpRequest* req) {
     // Step 1: get download file path
     std::string segment_file_path;
     try {
         const auto& tablet_id = get_http_param(req, kTabletIdParameter);
         auto tablet = get_tablet(tablet_id);
-        const auto& rowset_id = get_http_param(req, kSegmentPrefixParameter);
+        const auto& rowset_id = get_http_param(req, kRowsetIdParameter);
         const auto& segment_index = get_http_param(req, kSegmentIndexParameter);
         segment_file_path = tablet->get_segment_filepath(rowset_id, segment_index);
     } catch (const std::exception& e) {
@@ -122,12 +123,13 @@ void handle_get_rowset_meta(HttpRequest* req) {
     try {
         const auto& tablet_id = get_http_param(req, kTabletIdParameter);
         auto tablet = get_tablet(tablet_id);
-        const auto& rowset_id = get_http_param(req, kSegmentPrefixParameter);
+        const auto& rowset_id = get_http_param(req, kRowsetIdParameter);
         const auto& binlog_version = get_http_param(req, kBinlogVersionParameter);
         auto rowset_meta = tablet->get_binlog_rowset_meta(binlog_version, rowset_id);
         if (rowset_meta.empty()) {
             // TODO(Drogon): send error
-            HttpChannel::send_reply(req, fmt::format("get rowset meta failed, rowset_id={}", rowset_id));
+            HttpChannel::send_reply(req,
+                                    fmt::format("get rowset meta failed, rowset_id={}", rowset_id));
         } else {
             HttpChannel::send_reply(req, rowset_meta);
         }
