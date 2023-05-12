@@ -24,6 +24,7 @@
 
 #include <atomic>
 #include <functional>
+#include <limits>
 #include <list>
 #include <map>
 #include <memory>
@@ -494,6 +495,11 @@ public:
 
     int64_t get_table_id() { return _tablet_meta->table_id(); }
 
+    // binlog releated functions
+    bool is_binlog_enabled() const { return _binlog_enabled; }
+    int64_t binlog_ttl_ms() const { return _binlog_ttl_ms; }
+    int64_t binlog_max_size() const { return _binlog_max_size; }
+
 private:
     Status _init_once_action();
     void _print_missed_versions(const std::vector<Version>& missed_versions) const;
@@ -629,6 +635,11 @@ private:
     DISALLOW_COPY_AND_ASSIGN(Tablet);
 
     int64_t _io_error_times = 0;
+
+    // binlog info
+    std::atomic<bool> _binlog_enabled {false};
+    std::atomic<int64_t> _binlog_ttl_ms {std::numeric_limits<int64_t>::max()};
+    std::atomic<int64_t> _binlog_max_size {std::numeric_limits<int64_t>::max()};
 
 public:
     IntCounter* flush_bytes;

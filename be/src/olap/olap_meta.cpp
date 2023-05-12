@@ -225,6 +225,29 @@ Status OlapMeta::remove(const int column_family_index, const std::string& key) {
     return Status::OK();
 }
 
+Status OlapMeta::remove(const int column_family_index, const std::vector<std::string>& keys) {
+    DorisMetrics::instance()->meta_write_request_total->increment(1);
+    auto& handle = _handles[column_family_index];
+    rocksdb::Status s;
+    int64_t duration_ns = 0;
+    {
+        SCOPED_RAW_TIMER(&duration_ns);
+        WriteOptions write_options;
+        write_options.sync = config::sync_tablet_meta;
+        rocksdb::WriteBatch batch;
+        for (auto& key : keys) {
+            batch.Delete(handle.get(), rocksdb::Slice(key));
+        }
+        s = _db->Write(write_options, &batch);
+    }
+    DorisMetrics::instance()->meta_write_request_duration_us->increment(duration_ns / 1000);
+    if (!s.ok()) {
+        LOG(WARNING) << "rocks db delete key:" << keys << " failed, reason:" << s.ToString();
+        return Status::Error<META_DELETE_ERROR>();
+    }
+    return Status::OK();
+}
+
 Status OlapMeta::iterate(const int column_family_index, const std::string& prefix,
                          std::function<bool(const std::string&, const std::string&)> const& func) {
     auto& handle = _handles[column_family_index];

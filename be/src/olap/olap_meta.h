@@ -55,6 +55,7 @@ public:
     Status put(const int column_family_index, const std::vector<BatchEntry>& entries);
 
     Status remove(const int column_family_index, const std::string& key);
+    Status remove(const int column_family_index, const std::vector<std::string>& keys);
 
     Status iterate(const int column_family_index, const std::string& prefix,
                    std::function<bool(const std::string&, const std::string&)> const& func);
