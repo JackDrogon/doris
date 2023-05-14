@@ -936,6 +936,32 @@ struct TQueryStatsResult {
     5: optional map<i64, i64> tablet_stats
 }
 
+struct TGetBinlogRequest {
+    1: optional string cluster
+    2: required string user
+    3: required string passwd
+    4: required string db
+    5: required list<string> tables
+    6: optional string user_ip
+    7: optional string token
+    8: required i64 start_commit_seq
+}
+
+enum TBinlogType {
+  UPSERT = 0,
+}
+
+struct TBinlog {
+    1: required i64 commit_seq
+    2: required TBinlogType type
+    3: required string data
+}
+
+struct TGetBinlogResult {
+    1: required Status.TStatus status
+    2: optional list<TBinlog> binlogs
+}
+
 service FrontendService {
     TGetDbsResult getDbNames(1: TGetDbsParams params)
     TGetTablesResult getTableNames(1: TGetTablesParams params)
@@ -967,6 +993,7 @@ service FrontendService {
     TBeginTxnResult beginTxn(1: TBeginTxnRequest request)
     TCommitTxnResult commitTxn(1: TCommitTxnRequest request)
     TRollbackTxnResult rollbackTxn(1: TRollbackTxnRequest request)
+    TGetBinlogResult getBinlog(1: TGetBinlogRequest request)
 
     TWaitingTxnStatusResult waitingTxnStatus(1: TWaitingTxnStatusRequest request)
 

@@ -77,6 +77,7 @@ import org.apache.doris.thrift.TAddColumnsRequest;
 import org.apache.doris.thrift.TAddColumnsResult;
 import org.apache.doris.thrift.TBeginTxnRequest;
 import org.apache.doris.thrift.TBeginTxnResult;
+import org.apache.doris.thrift.TBinlog;
 import org.apache.doris.thrift.TCheckAuthRequest;
 import org.apache.doris.thrift.TCheckAuthResult;
 import org.apache.doris.thrift.TColumn;
@@ -99,6 +100,8 @@ import org.apache.doris.thrift.TFinishTaskRequest;
 import org.apache.doris.thrift.TFrontendPingFrontendRequest;
 import org.apache.doris.thrift.TFrontendPingFrontendResult;
 import org.apache.doris.thrift.TFrontendPingFrontendStatusCode;
+import org.apache.doris.thrift.TGetBinlogRequest;
+import org.apache.doris.thrift.TGetBinlogResult;
 import org.apache.doris.thrift.TGetDbsParams;
 import org.apache.doris.thrift.TGetDbsResult;
 import org.apache.doris.thrift.TGetQueryStatsRequest;
@@ -1919,6 +1922,83 @@ public class FrontendServiceImpl implements FrontendService.Iface {
             status.addToErrorMsgs(e.getMessage());
             result.setStatus(status);
         }
+        return result;
+    }
+
+    public TGetBinlogResult getBinlog(TGetBinlogRequest request) throws TException {
+        String clientAddr = getClientAddrAsString();
+        LOG.debug("receive txn begin request: {}, backend: {}", request, clientAddr);
+
+        TGetBinlogResult result = new TGetBinlogResult();
+        TStatus status = new TStatus(TStatusCode.OK);
+        result.setStatus(status);
+        try {
+            TGetBinlogResult tmpRes = getBinlogImpl(request, clientAddr);
+            result.setTxnId(tmpRes.getTxnId()).setDbId(tmpRes.getDbId());
+        } catch (DuplicatedRequestException e) {
+            // this is a duplicate request, just return previous txn id
+            LOG.warn("duplicate request for stream load. request id: {}, txn: {}", e.getDuplicatedRequestId(),
+                    e.getTxnId());
+            result.setTxnId(e.getTxnId());
+        } catch (LabelAlreadyUsedException e) {
+            status.setStatusCode(TStatusCode.LABEL_ALREADY_EXISTS);
+            status.addToErrorMsgs(e.getMessage());
+            result.setJobStatus(e.getJobStatus());
+        } catch (UserException e) {
+            LOG.warn("failed to begin: {}", e.getMessage());
+            status.setStatusCode(TStatusCode.ANALYSIS_ERROR);
+            status.addToErrorMsgs(e.getMessage());
+        } catch (Throwable e) {
+            LOG.warn("catch unknown result.", e);
+            status.setStatusCode(TStatusCode.INTERNAL_ERROR);
+            status.addToErrorMsgs(Strings.nullToEmpty(e.getMessage()));
+            return result;
+        }
+        return result;
+    }
+
+    private TGetBinlogResult getBinlogImpl(TGetBinlogRequest request, String clientIp) throws UserException {
+        String cluster = request.getCluster();
+        if (Strings.isNullOrEmpty(cluster)) {
+            cluster = SystemInfoService.DEFAULT_CLUSTER;
+        }
+
+        // step 1: check auth
+        if (Strings.isNullOrEmpty(request.getToken())) {
+            checkPasswordAndPrivs(cluster, request.getUser(), request.getPasswd(), request.getDb(), request.getTables(),
+                    request.getUserIp(), PrivPredicate.LOAD);
+        }
+
+        // step 3: check database
+        Env env = Env.getCurrentEnv();
+        String fullDbName = ClusterNamespace.getFullName(cluster, request.getDb());
+        Database db = env.getInternalCatalog().getDbNullable(fullDbName);
+        long dbId = db.getId();
+        if (db == null) {
+            String dbName = fullDbName;
+            if (Strings.isNullOrEmpty(request.getCluster())) {
+                dbName = request.getDb();
+            }
+            throw new UserException("unknown database, database=" + dbName);
+        }
+
+        // step 4: fetch all tableIds
+        // lookup tables && convert into tableIdList
+        List<Long> tableIdList = Lists.newArrayList();
+        for (String tblName : request.getTables()) {
+            String fullTblName = ClusterNamespace.getFullName(cluster, tblName);
+            Table table = db.getTableOrMetaException(fullTblName, TableType.OLAP);
+            if (table == null) {
+                throw new UserException("unknown table, table=" + fullTblName);
+            }
+            tableIdList.add(table.getId());
+        }
+
+        // step 6: get binlog
+        TGetBinlogResult result = new TGetBinlogResult();
+        long startCommitSeq = request.getStartCommitSeq();
+        List<TBinlog> binlogs = env.getBinlogManager().getBinlog(dbId, tableIdList, startCommitSeq);
+        result.setBinlogs(binlogs);
         return result;
     }
 }

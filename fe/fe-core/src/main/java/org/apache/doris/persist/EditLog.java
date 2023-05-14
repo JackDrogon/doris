@@ -512,7 +512,7 @@ public class EditLog {
                     final TransactionState state = (TransactionState) journal.getData();
                     Env.getCurrentGlobalTransactionMgr().replayUpsertTransactionState(state);
                     LOG.info("logid: {}, opcode: {}, tid: {}, json: {}", logId, opCode, state.getTransactionId(), state.toJson());
-                    UpsertRecord upsertRecord = new UpsertRecord(state);
+                    UpsertRecord upsertRecord = new UpsertRecord(logId, state);
                     LOG.info("logid: {}, upsert record: {}", logId, upsertRecord);
                     LOG.debug("opcode: {}, tid: {}", opCode, state.getTransactionId());
                     break;
@@ -1058,16 +1058,17 @@ public class EditLog {
     /**
      * Write an operation to the edit log. Do not sync to persistent store yet.
      */
-    private synchronized void logEdit(short op, Writable writable) {
+    private synchronized long logEdit(short op, Writable writable) {
         if (this.getNumEditStreams() == 0) {
             LOG.error("Fatal Error : no editLog stream", new Exception());
             throw new Error("Fatal Error : no editLog stream");
         }
 
         long start = System.currentTimeMillis();
+        long logId = -1;
         try {
             LOG.info("write op {} to edit log, writable: {}", op, writable);
-            journal.write(op, writable);
+            logId = journal.write(op, writable);
         } catch (Throwable t) {
             // Throwable contains all Exception and Error, such as IOException and
             // OutOfMemoryError
@@ -1102,6 +1103,8 @@ public class EditLog {
         if (MetricRepo.isInit) {
             MetricRepo.COUNTER_EDIT_LOG_WRITE.increase(1L);
         }
+
+        return logId;
     }
 
     /**
@@ -1371,9 +1374,9 @@ public class EditLog {
 
     // for TransactionState
     public void logInsertTransactionState(TransactionState transactionState) {
-        UpsertRecord upsertRecord = new UpsertRecord(transactionState);
+        long logId = logEdit(OperationType.OP_UPSERT_TRANSACTION_STATE, transactionState);
+        UpsertRecord upsertRecord = new UpsertRecord(logId, transactionState);
         LOG.info("EditLog upsert record: {}", upsertRecord);
-        logEdit(OperationType.OP_UPSERT_TRANSACTION_STATE, transactionState);
     }
 
     public void logBackupJob(BackupJob job) {

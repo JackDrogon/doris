@@ -78,6 +78,7 @@ import org.apache.doris.analysis.TableRenameClause;
 import org.apache.doris.analysis.TruncateTableStmt;
 import org.apache.doris.analysis.UninstallPluginStmt;
 import org.apache.doris.backup.BackupHandler;
+import org.apache.doris.binlog.BinlogManager;
 import org.apache.doris.blockrule.SqlBlockRuleMgr;
 import org.apache.doris.catalog.ColocateTableIndex.GroupId;
 import org.apache.doris.catalog.DistributionInfo.DistributionInfoType;
@@ -445,6 +446,8 @@ public class Env {
 
     private StatisticsCleaner statisticsCleaner;
 
+    private BinlogManager binlogManager;
+
     /**
      * TODO(tsy): to be removed after load refactor
      */
@@ -537,6 +540,10 @@ public class Env {
 
     public static InternalCatalog getCurrentInternalCatalog() {
         return getCurrentEnv().getInternalCatalog();
+    }
+
+    public BinlogManager getBinlogManager() {
+        return binlogManager;
     }
 
     private static class SingletonHolder {
@@ -660,6 +667,7 @@ public class Env {
         this.queryStats = new QueryStats();
         this.loadManagerAdapter = new LoadManagerAdapter();
         this.hiveTransactionMgr = new HiveTransactionMgr();
+        this.binlogManager = new BinlogManager();
     }
 
     public static void destroyCheckpoint() {

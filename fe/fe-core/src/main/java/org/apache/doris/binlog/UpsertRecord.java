@@ -53,6 +53,8 @@ public class UpsertRecord {
         }
     }
 
+    @SerializedName(value = "commitSeq")
+    private long commitSeq;
     // record the transaction state
     // (label, db, table, [shard_id, partition_id, index_id, version, version_hash])
     @SerializedName(value = "txnId")
@@ -66,7 +68,8 @@ public class UpsertRecord {
     private Map<Long, TableRecord> tableRecords;
 
     // construct from TransactionState
-    public UpsertRecord(TransactionState state) {
+    public UpsertRecord(long commitSeq, TransactionState state) {
+        this.commitSeq = commitSeq;
         txnId = state.getTransactionId();
         label = state.getLabel();
         dbId = state.getDbId();
@@ -80,6 +83,24 @@ public class UpsertRecord {
                 tableRecord.addPartitionRecord(partitionCommitInfo);
             }
         }
+    }
+
+    public long getDbId() {
+        return dbId;
+    }
+
+    public long getCommitSeq() {
+        return commitSeq;
+    }
+
+    public List<Long> getAllReleatedTableIds() {
+        List<Long> tabletIds = Lists.newArrayList();
+        for (TableRecord tableRecord: tableRecords.values()) {
+            for (PartitionRecord partitionRecord: tableRecord.partitionRecords) {
+                tabletIds.add(partitionRecord.partitionId);
+            }
+        }
+        return tabletIds;
     }
 
     public String toJson() {
