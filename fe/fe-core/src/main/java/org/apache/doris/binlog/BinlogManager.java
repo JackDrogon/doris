@@ -26,23 +26,28 @@ import com.google.common.collect.Maps;
 import java.util.Map;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 class TBinlogManager {
     private static final Logger LOG = LogManager.getLogger(BinlogManager.class);
 
+    private ReentrantReadWriteLock lock;
     private Map<Long, DBBinlog> dbBinlogMap;
 
     public TBinlogManager() {
+        lock = new ReentrantReadWriteLock();
         dbBinlogMap = Maps.newHashMap();
     }
 
     private void addBinlog(long dbId, List<Long> tableIds, TBinlog binlog) {
+        lock.writeLock().lock();
         DBBinlog dbBinlog = dbBinlogMap.get(dbId);
         if (dbBinlog == null) {
             dbBinlog = new DBBinlog(dbId);
             dbBinlogMap.put(dbId, dbBinlog);
         }
         dbBinlog.addBinlog(tableIds, binlog);
+        lock.writeLock().unlock();
     }
 
     public void addUpsertRecord(UpsertRecord upsertRecord) {
@@ -55,12 +60,14 @@ class TBinlogManager {
 
     // get binlog by dbId, return first binlog.version > version
     public TBinlog getBinlog(long dbId, long tableId, long commitSeq) {
+        lock.readLock().lock();
         Map<Long, DBBinlog> dbBinlog = dbBinlogMap.get(dbId);
         if (dbBinlog == null) {
             LOG.warn("dbBinlog not found. dbId: {}", dbId);
             return null;
         }
 
-        return dbBinlog.getBinlog(tableId, commitSeq);
+        TBinlog binlog = dbBinlog.getBinlog(tableId, commitSeq);
+        lock.readLock().unlock();
     }
 }
