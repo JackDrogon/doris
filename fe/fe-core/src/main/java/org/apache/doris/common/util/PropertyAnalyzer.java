@@ -127,6 +127,13 @@ public class PropertyAnalyzer {
    
     public static final String PROPERTIES_CCR_ENABLE = "ccr_enable";
 
+    // binlog.enable, binlog.ttl_seconds, binlog.max_bytes, binlog.max_history_nums
+    public static final String PROPERTIES_BINLOG_PREFIX = "binlog.";
+    public static final String PROPERTIES_BINLOG_ENABLE = "binlog.enable";
+    public static final String PROPERTIES_BINLOG_TTL_SECONDS = "binlog.ttl_seconds";
+    public static final String PROPERTIES_BINLOG_MAX_BYTES = "binlog.max_bytes";
+    public static final String PROPERTIES_BINLOG_MAX_HISTORY_NUMS = "binlog.max_history_nums";
+
     private static final Logger LOG = LogManager.getLogger(PropertyAnalyzer.class);
     private static final String COMMA_SEPARATOR = ",";
     private static final double MAX_FPP = 0.05;

@@ -84,6 +84,12 @@ public class AlterOperations {
         ).anyMatch(clause -> clause.getProperties().containsKey(PropertyAnalyzer.PROPERTIES_CCR_ENABLE));
     }
 
+    public boolean checkBinlogConfigChange(List<AlterClause> alterClauses) {
+        return alterClauses.stream().filter(clause ->
+            clause instanceof ModifyTablePropertiesClause
+        ).anyMatch(clause -> clause.getProperties().containsKey(PropertyAnalyzer.PROPERTIES_BINLOG_ENABLE) || clause.getProperties().containsKey(PropertyAnalyzer.PROPERTIES_BINLOG_TTL_SECONDS) || clause.getProperties().containsKey(PropertyAnalyzer.PROPERTIES_BINLOG_MAX_BYTES) || clause.getProperties().containsKey(PropertyAnalyzer.PROPERTIES_BINLOG_MAX_HISTORY_NUMS));
+    }
+
     public boolean isCcrEnable(List<AlterClause> alterClauses) {
         return alterClauses.stream().filter(clause ->
             clause instanceof ModifyTablePropertiesClause

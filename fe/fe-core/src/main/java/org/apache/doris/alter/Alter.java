@@ -218,6 +218,9 @@ public class Alter {
         } else if (currentAlterOps.checkCcrEnable(alterClauses)) {
             olapTable.setCcrEnable(currentAlterOps.isCcrEnable(alterClauses));
             needProcessOutsideTableLock = true;
+        } else if (currentAlterOps.checkBinlogConfigChange(alterClauses)) {
+            // TODO(Drogon): check error
+            schemaChangeHandler.updateBinlogConfig(alterClauses, clusterName, db, olapTable);
         } else if (currentAlterOps.hasSchemaChangeOp()) {
             // if modify storage type to v2, do schema change to convert all related tablets to segment v2 format
             schemaChangeHandler.process(alterClauses, clusterName, db, olapTable);

@@ -61,6 +61,9 @@ Status TabletMeta::create(const TCreateTabletReq& request, const TabletUid& tabl
             request.__isset.enable_unique_key_merge_on_write
                     ? request.enable_unique_key_merge_on_write
                     : false));
+    if (request.__isset.binlog_config) {
+        tablet_meta->set_binlog_config(tablet_meta_info.binlog_config);
+    }
     return Status::OK();
 }
 
@@ -276,7 +279,8 @@ TabletMeta::TabletMeta(const TabletMeta& b)
           _storage_policy_id(b._storage_policy_id),
           _cooldown_meta_id(b._cooldown_meta_id),
           _enable_unique_key_merge_on_write(b._enable_unique_key_merge_on_write),
-          _delete_bitmap(b._delete_bitmap) {};
+          _delete_bitmap(b._delete_bitmap),
+          _binlog_config(b._binlog_config) {};
 
 void TabletMeta::init_column_from_tcolumn(uint32_t unique_id, const TColumn& tcolumn,
                                           ColumnPB* column) {
@@ -526,6 +530,10 @@ void TabletMeta::init_from_pb(const TabletMetaPB& tablet_meta_pb) {
             delete_bitmap().delete_bitmap[{rst_id, seg_id, ver}] = roaring::Roaring::read(bitmap);
         }
     }
+
+    if (tablet_meta_pb.has_binlog_config()) {
+        _binlog_config = tablet_meta_pb.binlog_config();
+    }
 }
 
 void TabletMeta::to_meta_pb(TabletMetaPB* tablet_meta_pb) {
@@ -599,6 +607,7 @@ void TabletMeta::to_meta_pb(TabletMetaPB* tablet_meta_pb) {
             *(delete_bitmap_pb->add_segment_delete_bitmaps()) = std::move(bitmap_data);
         }
     }
+    _binlog_config.to_pb(tablet_meta_pb->mutable_binlog_config());
 }
 
 uint32_t TabletMeta::mem_size() const {

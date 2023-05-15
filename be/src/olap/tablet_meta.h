@@ -38,6 +38,7 @@
 #include "common/status.h"
 #include "gutil/stringprintf.h"
 #include "io/fs/file_system.h"
+#include "olap/binlog_config.h"
 #include "olap/lru_cache.h"
 #include "olap/olap_common.h"
 #include "olap/rowset/rowset_meta.h"
@@ -217,6 +218,10 @@ public:
 
     bool enable_unique_key_merge_on_write() const { return _enable_unique_key_merge_on_write; }
 
+    // TODO(Drogon): thread safety
+    const BinlogConfig& binlog_config() const { return _binlog_config; }
+    void set_binlog_config(const BinlogConfig& binlog_config) { _binlog_config = binlog_config; }
+
 private:
     Status _save_meta(DataDir* data_dir);
 
@@ -259,6 +264,9 @@ private:
     // query performance significantly.
     bool _enable_unique_key_merge_on_write = false;
     std::shared_ptr<DeleteBitmap> _delete_bitmap;
+
+    // binlog config
+    BinlogConfig _binlog_config {};
 
     mutable std::shared_mutex _meta_lock;
 };

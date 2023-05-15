@@ -31,6 +31,7 @@ import org.apache.doris.analysis.ModifyColumnClause;
 import org.apache.doris.analysis.ModifyTablePropertiesClause;
 import org.apache.doris.analysis.ReorderColumnsClause;
 import org.apache.doris.catalog.AggregateType;
+import org.apache.doris.catalog.BinlogConfig;
 import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.DistributionInfo;
@@ -2002,7 +2003,7 @@ public class SchemaChangeHandler extends AlterHandler {
         }
 
         for (Partition partition : partitions) {
-            updatePartitionProperties(db, olapTable.getName(), partition.getName(), storagePolicyId, isInMemory);
+            updatePartitionProperties(db, olapTable.getName(), partition.getName(), storagePolicyId, isInMemory, null);
         }
 
         olapTable.writeLockOrDdlException();
@@ -2044,7 +2045,7 @@ public class SchemaChangeHandler extends AlterHandler {
 
         for (String partitionName : partitionNames) {
             try {
-                updatePartitionProperties(db, olapTable.getName(), partitionName, storagePolicyId, isInMemory);
+                updatePartitionProperties(db, olapTable.getName(), partitionName, storagePolicyId, isInMemory, null);
             } catch (Exception e) {
                 String errMsg = "Failed to update partition[" + partitionName + "]'s 'in_memory' property. "
                         + "The reason is [" + e.getMessage() + "]";
@@ -2058,7 +2059,7 @@ public class SchemaChangeHandler extends AlterHandler {
      * This operation may return partial successfully, with an exception to inform user to retry
      */
     public void updatePartitionProperties(Database db, String tableName, String partitionName, long storagePolicyId,
-            int isInMemory) throws UserException {
+            int isInMemory, BinlogConfig binlogConfig) throws UserException {
         // be id -> <tablet id,schemaHash>
         Map<Long, Set<Pair<Long, Integer>>> beIdToTabletIdWithHash = Maps.newHashMap();
         OlapTable olapTable = (OlapTable) db.getTableOrMetaException(tableName, Table.TableType.OLAP);
@@ -2090,7 +2091,7 @@ public class SchemaChangeHandler extends AlterHandler {
         for (Map.Entry<Long, Set<Pair<Long, Integer>>> kv : beIdToTabletIdWithHash.entrySet()) {
             countDownLatch.addMark(kv.getKey(), kv.getValue());
             UpdateTabletMetaInfoTask task = new UpdateTabletMetaInfoTask(kv.getKey(), kv.getValue(), isInMemory,
-                    storagePolicyId, countDownLatch);
+                    storagePolicyId, binlogConfig, countDownLatch);
             batchTask.addTask(task);
         }
         if (!FeConstants.runningUnitTest) {
@@ -2604,5 +2605,75 @@ public class SchemaChangeHandler extends AlterHandler {
         } finally {
             olapTable.writeUnlock();
         }
+    }
+
+    public boolean updateBinlogConfig(Database db, OlapTable olapTable, Map<String, String> properties) throws DdlException, UserException {
+        // TODO(Drogon): check olapTable read binlog thread safety
+        List<Partition> partitions = Lists.newArrayList();
+        BinlogConfig oldBinlogConfig;
+        BinlogConfig newBinlogConfig;
+
+        db.readLock();
+        try {
+            oldBinlogConfig = new BinlogConfig(olapTable.getBinlogConfig());
+            newBinlogConfig = new BinlogConfig(oldBinlogConfig);
+            partitions.addAll(olapTable.getPartitions());
+        } catch (Exception e) {
+            throw new DdlException(e.getMessage());
+        } finally {
+            db.readUnlock();
+        }
+
+        if (properties.containsKey(PropertyAnalyzer.PROPERTIES_BINLOG_ENABLE)) {
+            boolean binlogEnable = Boolean.parseBoolean(properties.get(
+                    PropertyAnalyzer.PROPERTIES_BINLOG_ENABLE));
+            if (binlogEnable != oldBinlogConfig.isEnable()) {
+                newBinlogConfig.setEnable(binlogEnable);
+            }
+        }
+        if (properties.containsKey(PropertyAnalyzer.PROPERTIES_BINLOG_TTL_SECONDS)) {
+            Long binlogTtlSeconds = Long.parseLong(properties.get(
+                    PropertyAnalyzer.PROPERTIES_BINLOG_TTL_SECONDS));
+            if (binlogTtlSeconds != oldBinlogConfig.getTtlSeconds()) {
+                newBinlogConfig.setTtlSeconds(binlogTtlSeconds);
+            }
+        }
+        if (properties.containsKey(PropertyAnalyzer.PROPERTIES_BINLOG_MAX_BYTES)) {
+            Long binlogMaxBytes = Long.parseLong(properties.get(
+                    PropertyAnalyzer.PROPERTIES_BINLOG_MAX_BYTES));
+            if (binlogMaxBytes != oldBinlogConfig.getMaxBytes()) {
+                newBinlogConfig.setMaxBytes(binlogMaxBytes);
+            }
+        }
+        if (properties.containsKey(PropertyAnalyzer.PROPERTIES_BINLOG_MAX_HISTORY_NUMS)) {
+            Long binlogMaxHistoryNums = Long.parseLong(properties.get(
+                    PropertyAnalyzer.PROPERTIES_BINLOG_MAX_HISTORY_NUMS));
+            if (binlogMaxHistoryNums != oldBinlogConfig.getMaxHistoryNums()) {
+                newBinlogConfig.setMaxHistoryNums(binlogMaxHistoryNums);
+            }
+        }
+
+        boolean hasChanged = !newBinlogConfig.equals(oldBinlogConfig);
+        if (!hasChanged) {
+            LOG.info("table {} binlog config is same as the previous version, so nothing need to do",
+                    olapTable.getName());
+            return true;
+        }
+
+        LOG.info("begin to update table's binlog config. table: {}, old binlog: {}, new binlog: {}", olapTable.getName(), oldBinlogConfig, newBinlogConfig);
+
+
+        for (Partition partition : partitions) {
+            updatePartitionProperties(db, olapTable.getName(), partition.getName(), -1, -1, newBinlogConfig);
+        }
+
+        olapTable.writeLockOrDdlException();
+        try {
+            Env.getCurrentEnv().modifyTableProperties(db, olapTable, properties);
+        } finally {
+            olapTable.writeUnlock();
+        }
+
+        return false;
     }
 }

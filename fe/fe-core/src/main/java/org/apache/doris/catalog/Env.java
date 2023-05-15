@@ -80,6 +80,7 @@ import org.apache.doris.analysis.UninstallPluginStmt;
 import org.apache.doris.backup.BackupHandler;
 import org.apache.doris.binlog.BinlogManager;
 import org.apache.doris.blockrule.SqlBlockRuleMgr;
+import org.apache.doris.catalog.BinlogConfig;
 import org.apache.doris.catalog.ColocateTableIndex.GroupId;
 import org.apache.doris.catalog.DistributionInfo.DistributionInfoType;
 import org.apache.doris.catalog.MaterializedIndex.IndexExtState;
@@ -4398,15 +4399,25 @@ public class Env {
         } else {
             tableProperty.modifyTableProperties(properties);
         }
-        tableProperty.buildInMemory();
-        tableProperty.buildStoragePolicy();
-        tableProperty.buildCcrEnable();
+        tableProperty.buildInMemory()
+        .buildStoragePolicy().
+        .buildCcrEnable();
 
         // need to update partition info meta
         for (Partition partition : table.getPartitions()) {
             table.getPartitionInfo().setIsInMemory(partition.getId(), tableProperty.isInMemory());
             table.getPartitionInfo().setStoragePolicy(partition.getId(), tableProperty.getStoragePolicy());
         }
+
+        ModifyTablePropertyOperationLog info = new ModifyTablePropertyOperationLog(db.getId(), table.getId(),
+                properties);
+        editLog.logModifyInMemory(info);
+    }
+
+    public void updateBinlogConfig(Database db, OlapTable table, BinlogConfig newBinlogConfig) {
+        Preconditions.checkArgument(table.isWriteLockHeldByCurrentThread());
+
+        table.setBinlogConfig(newBinlogConfig);
 
         ModifyTablePropertyOperationLog info = new ModifyTablePropertyOperationLog(db.getId(), table.getId(),
                 properties);
@@ -4433,13 +4444,22 @@ public class Env {
             }
 
             // need to replay partition info meta
-            if (opCode == OperationType.OP_MODIFY_IN_MEMORY) {
-                for (Partition partition : olapTable.getPartitions()) {
-                    olapTable.getPartitionInfo().setIsInMemory(partition.getId(), tableProperty.isInMemory());
-                    // storage policy re-use modify in memory
-                    Optional.ofNullable(tableProperty.getStoragePolicy()).filter(p -> !p.isEmpty())
-                            .ifPresent(p -> olapTable.getPartitionInfo().setStoragePolicy(partition.getId(), p));
-                }
+            switch (opCode) {
+                case OperationType.OP_MODIFY_IN_MEMORY:
+                    for (Partition partition : olapTable.getPartitions()) {
+                        olapTable.getPartitionInfo().setIsInMemory(partition.getId(), tableProperty.isInMemory());
+                        // storage policy re-use modify in memory
+                        Optional.ofNullable(tableProperty.getStoragePolicy()).filter(p -> !p.isEmpty())
+                                .ifPresent(p -> olapTable.getPartitionInfo().setStoragePolicy(partition.getId(), p));
+                    }
+                    break;
+                case OperationType.OP_UPDATE_BINLOG_CONFIG:
+                    BinlogConfig newBinlogConfig = new BinlogConfig();
+                    newBinlogConfig.mergeFromProperties(properties);
+                    olapTable.setBinlogConfig(newBinlogConfig);
+                    break;
+                default:
+                    break;
             }
         } finally {
             olapTable.writeUnlock();
