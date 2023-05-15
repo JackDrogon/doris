@@ -19,6 +19,8 @@ package org.apache.doris.binlog;
 
 import org.apache.doris.thrift.TBinlog;
 import org.apache.doris.thrift.TBinlogType;
+import org.apache.doris.common.Pair;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import com.google.common.collect.Maps;
@@ -33,10 +35,13 @@ class TBinlogManager {
 
     private ReentrantReadWriteLock lock;
     private Map<Long, DBBinlog> dbBinlogMap;
+    // Pair(commitSeq, timestamp), used for gc
+    private List<Pair<Long, Long>> timestamps;
 
     public TBinlogManager() {
         lock = new ReentrantReadWriteLock();
         dbBinlogMap = Maps.newHashMap();
+        timestamps = new ArrayList<Pair<Long, Long>>();
     }
 
     private void addBinlog(long dbId, List<Long> tableIds, TBinlog binlog) {
@@ -47,6 +52,7 @@ class TBinlogManager {
             dbBinlogMap.put(dbId, dbBinlog);
         }
         dbBinlog.addBinlog(tableIds, binlog);
+        timestamps.add(Pair.of(binlog.getCommitSeq(), binlog.getTimestamp()));
         lock.writeLock().unlock();
     }
 
@@ -54,7 +60,8 @@ class TBinlogManager {
         long dbId = upsertRecord.getDbId();
         List<Long> tableId = upsertRecord.getAllReleatedTableIds();
         long commitSeq = upsertRecord.getCommitSeq();
-        TBinlog binlog = new TBinlog(commitSeq, TBinlogType.UPSERT, upsertRecord.toJson())
+        long timestamp = upsertRecord.getTimestamp();
+        TBinlog binlog = new TBinlog(commitSeq, timestamp, TBinlogType.UPSERT, upsertRecord.toJson())
         addBinlog(dbId, tableId, binlog);
     }
 
@@ -69,5 +76,18 @@ class TBinlogManager {
 
         TBinlog binlog = dbBinlog.getBinlog(tableId, commitSeq);
         lock.readLock().unlock();
+    }
+
+    // gc binlog, remove all binlog timestamp < minTimestamp
+    // TODO(Drogon): get minCommitSeq from timestamps
+    public void gc(long minTimestamp) {
+        lock.writeLock().lock();
+        for (Pair<Long, Long> pair : timestamps) {
+            if (pair.first > version) {
+                break;
+            }
+            timestamps.remove(pair);
+        }
+        lock.writeLock().unlock();
     }
 }

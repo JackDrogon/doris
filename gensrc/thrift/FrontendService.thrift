@@ -953,8 +953,9 @@ enum TBinlogType {
 
 struct TBinlog {
     1: required i64 commit_seq
-    2: required TBinlogType type
-    3: required string data
+    2: required i64 timestamp
+    3: required TBinlogType type
+    4: required string data
 }
 
 struct TGetBinlogResult {
