@@ -133,6 +133,11 @@ public class ModifyTablePropertiesClause extends AlterTableClause {
             this.needTableStable = false;
             setCcrEnable(
                     Boolean.parseBoolean(properties.getOrDefault(PropertyAnalyzer.PROPERTIES_CCR_ENABLE, "false")));
+        } else if (properties.containsKey(PropertyAnalyzer.PROPERTIES_BINLOG_ENABLE)
+            || properties.containsKey(PropertyAnalyzer.PROPERTIES_BINLOG_TTL_SECONDS)
+            || properties.containsKey(PropertyAnalyzer.PROPERTIES_BINLOG_MAX_BYTES)
+            || properties.containsKey(PropertyAnalyzer.PROPERTIES_BINLOG_MAX_HISTORY_NUMS)) {
+            // do nothing, will be alter in SchemaChangeHandler.updateBinlogConfig
         } else {
             throw new AnalysisException("Unknown table property: " + properties.keySet());
         }

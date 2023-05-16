@@ -221,7 +221,6 @@ public class Alter {
         } else if (currentAlterOps.checkBinlogConfigChange(alterClauses)) {
             // TODO(Drogon): check error
             ((SchemaChangeHandler) schemaChangeHandler).updateBinlogConfig(db, olapTable, alterClauses);
-            needProcessOutsideTableLock = true;
         } else if (currentAlterOps.hasSchemaChangeOp()) {
             // if modify storage type to v2, do schema change to convert all related tablets to segment v2 format
             schemaChangeHandler.process(alterClauses, clusterName, db, olapTable);
