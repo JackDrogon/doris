@@ -168,4 +168,15 @@ public class BinlogConfig implements Writable {
     public String toString() {
         return GsonUtils.GSON.toJson(this);
     }
+
+    public void appendToShowCreateTable(StringBuilder sb) {
+        sb.append(",\n\"").append(PropertyAnalyzer.PROPERTIES_BINLOG_ENABLE).append("\" = \"").append(enable)
+                .append("\"");
+        sb.append(",\n\"").append(PropertyAnalyzer.PROPERTIES_BINLOG_TTL_SECONDS).append("\" = \"").append(ttlSeconds)
+                .append("\"");
+        sb.append(",\n\"").append(PropertyAnalyzer.PROPERTIES_BINLOG_MAX_BYTES).append("\" = \"").append(maxBytes)
+                .append("\"");
+        sb.append(",\n\"").append(PropertyAnalyzer.PROPERTIES_BINLOG_MAX_HISTORY_NUMS).append("\" = \"")
+                .append(maxHistoryNums).append("\"");
+    }
 }

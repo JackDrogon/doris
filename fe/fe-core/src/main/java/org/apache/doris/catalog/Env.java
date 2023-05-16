@@ -3062,6 +3062,10 @@ public class Env {
             sb.append(",\n\"").append(PropertyAnalyzer.PROPERTIES_DISABLE_AUTO_COMPACTION).append("\" = \"");
             sb.append(olapTable.disableAutoCompaction()).append("\"");
 
+            // binlog
+            BinlogConfig binlogConfig = olapTable.getBinlogConfig();
+            binlogConfig.appendToShowCreateTable(sb);
+
             sb.append("\n)");
         } else if (table.getType() == TableType.MYSQL) {
             MysqlTable mysqlTable = (MysqlTable) table;
