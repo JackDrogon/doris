@@ -65,7 +65,7 @@ public:
 private:
     std::string _root_path;
     // keep order of _db && _handles, we need destroy _handles before _db
-    std::unique_ptr<rocksdb::DB> _db;
+    std::unique_ptr<rocksdb::DB, std::function<void(rocksdb::DB*)>> _db;
     std::vector<std::unique_ptr<rocksdb::ColumnFamilyHandle>> _handles;
 };
 
