@@ -153,9 +153,9 @@ public class MockedBackendFactory {
                     while (true) {
                         try {
                             TAgentTaskRequest request = taskQueue.take();
-                            System.out.println("get agent task request. type: " + request.getTaskType()
-                                    + ", signature: " + request.getSignature() + ", fe addr: " +
-                                    backend.getFeAddress());
+                            System.out.println(
+                                    "get agent task request. type: " + request.getTaskType() + ", signature: "
+                                    + request.getSignature() + ", fe addr: " + backend.getFeAddress());
                             TFinishTaskRequest finishTaskRequest = new TFinishTaskRequest(tBackend,
                                     request.getTaskType(), request.getSignature(), new TStatus(TStatusCode.OK));
                             TTaskType taskType = request.getTaskType();

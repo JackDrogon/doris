@@ -52,5 +52,5 @@ public class TableBinlog {
         TBinlog guard = new TBinlog();
         guard.setCommitSeq(commitSeq);
         return binlogs.higher(guard);
-    }    
+    }
 }

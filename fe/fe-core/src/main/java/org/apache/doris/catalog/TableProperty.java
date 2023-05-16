@@ -18,7 +18,6 @@
 package org.apache.doris.catalog;
 
 import org.apache.doris.analysis.DataSortInfo;
-import org.apache.doris.catalog.BinlogConfig;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.FeMetaVersion;
 import org.apache.doris.common.io.Text;
@@ -61,7 +60,7 @@ public class TableProperty implements Writable {
     private boolean isInMemory = false;
 
     private String storagePolicy = "";
-    private Boolean ccrEnable = null; 
+    private Boolean ccrEnable = null;
     private BinlogConfig binlogConfig;
     private boolean isDynamicSchema = false;
 
@@ -123,7 +122,7 @@ public class TableProperty implements Writable {
      * @return this for chained
      */
     public TableProperty resetPropertiesForRestore(boolean reserveDynamicPartitionEnable, boolean reserveReplica,
-            ReplicaAllocation replicaAlloc) {
+                                                   ReplicaAllocation replicaAlloc) {
         // disable dynamic partition
         if (properties.containsKey(DynamicPartitionProperty.ENABLE)) {
             if (!reserveDynamicPartitionEnable) {
@@ -217,7 +216,8 @@ public class TableProperty implements Writable {
             binlogConfig.setMaxBytes(Long.parseLong(properties.get(PropertyAnalyzer.PROPERTIES_BINLOG_MAX_BYTES)));
         }
         if (properties.containsKey(PropertyAnalyzer.PROPERTIES_BINLOG_MAX_HISTORY_NUMS)) {
-            binlogConfig.setMaxHistoryNums(Long.parseLong(properties.get(PropertyAnalyzer.PROPERTIES_BINLOG_MAX_HISTORY_NUMS)));
+            binlogConfig.setMaxHistoryNums(
+                    Long.parseLong(properties.get(PropertyAnalyzer.PROPERTIES_BINLOG_MAX_HISTORY_NUMS)));
         }
         this.binlogConfig = binlogConfig;
 
@@ -234,16 +234,19 @@ public class TableProperty implements Writable {
     public void setBinlogConfig(BinlogConfig newBinlogConfig) {
         Map<String, String> binlogProperties = Maps.newHashMap();
         binlogProperties.put(PropertyAnalyzer.PROPERTIES_BINLOG_ENABLE, String.valueOf(newBinlogConfig.isEnable()));
-        binlogProperties.put(PropertyAnalyzer.PROPERTIES_BINLOG_TTL_SECONDS, String.valueOf(newBinlogConfig.getTtlSeconds()));
-        binlogProperties.put(PropertyAnalyzer.PROPERTIES_BINLOG_MAX_BYTES, String.valueOf(newBinlogConfig.getMaxBytes()));
-        binlogProperties.put(PropertyAnalyzer.PROPERTIES_BINLOG_MAX_HISTORY_NUMS, String.valueOf(newBinlogConfig.getMaxHistoryNums()));
+        binlogProperties.put(PropertyAnalyzer.PROPERTIES_BINLOG_TTL_SECONDS,
+                String.valueOf(newBinlogConfig.getTtlSeconds()));
+        binlogProperties.put(PropertyAnalyzer.PROPERTIES_BINLOG_MAX_BYTES,
+                String.valueOf(newBinlogConfig.getMaxBytes()));
+        binlogProperties.put(PropertyAnalyzer.PROPERTIES_BINLOG_MAX_HISTORY_NUMS,
+                String.valueOf(newBinlogConfig.getMaxHistoryNums()));
         modifyTableProperties(binlogProperties);
         this.binlogConfig = newBinlogConfig;
     }
 
     public TableProperty buildDynamicSchema() {
         isDynamicSchema = Boolean.parseBoolean(
-            properties.getOrDefault(PropertyAnalyzer.PROPERTIES_DYNAMIC_SCHEMA, "false"));
+                properties.getOrDefault(PropertyAnalyzer.PROPERTIES_DYNAMIC_SCHEMA, "false"));
         return this;
     }
 

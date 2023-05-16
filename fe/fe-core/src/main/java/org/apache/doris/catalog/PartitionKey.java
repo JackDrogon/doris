@@ -34,12 +34,10 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonPrimitive;
 import com.google.gson.JsonSerializationContext;
 import com.google.gson.JsonSerializer;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -445,7 +443,8 @@ public class PartitionKey implements Comparable<PartitionKey>, Writable {
 
     public static class PartitionKeySerializer implements JsonSerializer<PartitionKey> {
         @Override
-        public JsonElement serialize(PartitionKey partitionKey, java.lang.reflect.Type reflectType, JsonSerializationContext context) {
+        public JsonElement serialize(PartitionKey partitionKey, java.lang.reflect.Type reflectType,
+                                     JsonSerializationContext context) {
             JsonArray result = new JsonArray();
 
             List<PrimitiveType> types = partitionKey.getTypes();

@@ -511,7 +511,8 @@ public class EditLog {
                 case OperationType.OP_UPSERT_TRANSACTION_STATE: {
                     final TransactionState state = (TransactionState) journal.getData();
                     Env.getCurrentGlobalTransactionMgr().replayUpsertTransactionState(state);
-                    LOG.info("logid: {}, opcode: {}, tid: {}, json: {}", logId, opCode, state.getTransactionId(), state.toJson());
+                    LOG.info("logid: {}, opcode: {}, tid: {}, json: {}", logId, opCode, state.getTransactionId(),
+                            state.toJson());
                     UpsertRecord upsertRecord = new UpsertRecord(logId, state);
                     LOG.info("logid: {}, upsert record: {}", logId, upsertRecord);
                     LOG.debug("opcode: {}, tid: {}", opCode, state.getTransactionId());

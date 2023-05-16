@@ -131,7 +131,8 @@ public class ModifyTablePropertiesClause extends AlterTableClause {
             // do nothing, will be alter in SchemaChangeHandler.updateTableProperties
         } else if (properties.containsKey(PropertyAnalyzer.PROPERTIES_CCR_ENABLE)) {
             this.needTableStable = false;
-            setCcrEnable(Boolean.parseBoolean(properties.getOrDefault(PropertyAnalyzer.PROPERTIES_CCR_ENABLE, "false")));
+            setCcrEnable(
+                    Boolean.parseBoolean(properties.getOrDefault(PropertyAnalyzer.PROPERTIES_CCR_ENABLE, "false")));
         } else {
             throw new AnalysisException("Unknown table property: " + properties.keySet());
         }

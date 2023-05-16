@@ -124,7 +124,7 @@ public class PropertyAnalyzer {
     public static final String PROPERTIES_STORE_ROW_COLUMN = "store_row_column";
 
     public static final String PROPERTIES_MUTABLE = "mutable";
-   
+
     public static final String PROPERTIES_CCR_ENABLE = "ccr_enable";
 
     // binlog.enable, binlog.ttl_seconds, binlog.max_bytes, binlog.max_history_nums
