@@ -26,12 +26,14 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <ostream>
 #include <roaring/roaring.hh>
 #include <shared_mutex>
 #include <string>
 #include <tuple>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "common/logging.h"
@@ -82,6 +84,7 @@ enum TabletState {
 class DataDir;
 class TabletMeta;
 class DeleteBitmap;
+class TBinlogConfig;
 
 using TabletMetaSharedPtr = std::shared_ptr<TabletMeta>;
 using DeleteBitmapPtr = std::shared_ptr<DeleteBitmap>;
@@ -102,7 +105,8 @@ public:
                const std::unordered_map<uint32_t, uint32_t>& col_ordinal_to_unique_id,
                TabletUid tablet_uid, TTabletType::type tabletType,
                TCompressionType::type compression_type, int64_t storage_policy_id = 0,
-               bool enable_unique_key_merge_on_write = false);
+               bool enable_unique_key_merge_on_write = false,
+               std::optional<TBinlogConfig> binlog_config = {});
     // If need add a filed in TableMeta, filed init copy in copy construct function
     TabletMeta(const TabletMeta& tablet_meta);
     TabletMeta(TabletMeta&& tablet_meta) = delete;
@@ -220,7 +224,9 @@ public:
 
     // TODO(Drogon): thread safety
     const BinlogConfig& binlog_config() const { return _binlog_config; }
-    void set_binlog_config(const BinlogConfig& binlog_config) { _binlog_config = binlog_config; }
+    void set_binlog_config(BinlogConfig binlog_config) {
+        _binlog_config = std::move(binlog_config);
+    }
 
 private:
     Status _save_meta(DataDir* data_dir);

@@ -879,9 +879,14 @@ void TaskWorkerPool::_update_tablet_meta_worker_thread_callback() {
                 tablet->tablet_meta()->set_replica_id(tablet_meta_info.replica_id);
             }
             if (tablet_meta_info.__isset.binlog_config) {
+                BinlogConfig new_binlog_config;
+                new_binlog_config = tablet_meta_info.binlog_config;
                 LOG(INFO) << fmt::format(
-                        "update tablet meta binlog config. tablet_id={}, old_binlog_config={}, new_binlog_config={}",
-                        tablet_meta_info.tablet_id, tablet->tablet_meta(), tablet_meta_info.binlog_config);
+                        "update tablet meta binlog config. tablet_id={}, old_binlog_config={}, "
+                        "new_binlog_config={}",
+                        tablet_meta_info.tablet_id,
+                        tablet->tablet_meta()->binlog_config().to_string(),
+                        new_binlog_config.to_string());
             }
             if (need_to_save) {
                 std::shared_lock rlock(tablet->get_header_lock());

@@ -52,7 +52,11 @@ Status TabletMeta::create(const TCreateTabletReq& request, const TabletUid& tabl
                           uint64_t shard_id, uint32_t next_unique_id,
                           const unordered_map<uint32_t, uint32_t>& col_ordinal_to_unique_id,
                           TabletMetaSharedPtr* tablet_meta) {
-    tablet_meta->reset(new TabletMeta(
+    std::optional<TBinlogConfig> binlog_config;
+    if (request.__isset.binlog_config) {
+        binlog_config = request.binlog_config;
+    }
+    *tablet_meta = std::make_shared<TabletMeta>(
             request.table_id, request.partition_id, request.tablet_id, request.replica_id,
             request.tablet_schema.schema_hash, shard_id, request.tablet_schema, next_unique_id,
             col_ordinal_to_unique_id, tablet_uid,
@@ -60,10 +64,8 @@ Status TabletMeta::create(const TCreateTabletReq& request, const TabletUid& tabl
             request.compression_type, request.storage_policy_id,
             request.__isset.enable_unique_key_merge_on_write
                     ? request.enable_unique_key_merge_on_write
-                    : false));
-    if (request.__isset.binlog_config) {
-        tablet_meta->set_binlog_config(tablet_meta_info.binlog_config);
-    }
+                    : false,
+            std::move(binlog_config));
     return Status::OK();
 }
 
@@ -78,7 +80,8 @@ TabletMeta::TabletMeta(int64_t table_id, int64_t partition_id, int64_t tablet_id
                        const std::unordered_map<uint32_t, uint32_t>& col_ordinal_to_unique_id,
                        TabletUid tablet_uid, TTabletType::type tabletType,
                        TCompressionType::type compression_type, int64_t storage_policy_id,
-                       bool enable_unique_key_merge_on_write)
+                       bool enable_unique_key_merge_on_write,
+                       std::optional<TBinlogConfig> binlog_config)
         : _tablet_uid(0, 0),
           _schema(new TabletSchema),
           _delete_bitmap(new DeleteBitmap(tablet_id)) {
@@ -254,6 +257,12 @@ TabletMeta::TabletMeta(int64_t table_id, int64_t partition_id, int64_t tablet_id
     }
     if (tablet_schema.__isset.store_row_column) {
         schema->set_store_row_column(tablet_schema.store_row_column);
+    }
+
+    if (binlog_config.has_value()) {
+        BinlogConfig tmp_binlog_config;
+        tmp_binlog_config = binlog_config.value();
+        tmp_binlog_config.to_pb(tablet_meta_pb.mutable_binlog_config());
     }
 
     init_from_pb(tablet_meta_pb);
