@@ -19,27 +19,34 @@ package org.apache.doris.binlog;
 
 import org.apache.doris.thrift.TBinlog;
 
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Map;
 import java.util.HashMap;
-import java.util.Collections;
-import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeSet;
 
 public class DBBinlog {
     private long dbId;
     // all binlogs contain table binlogs && create table binlog etc ...
-    private List<TBinlog> allBinlogs;
+    private TreeSet<TBinlog> allBinlogs;
     // table binlogs
     private Map<Long, TableBinlog> tableBinlogMap;
 
     public DBBinlog(long dbId) {
         this.dbId = dbId;
-        allBinlogs = new ArrayList<TBinlog>();
+        // allBinlogs treeset order by commitSeq
+        allBinlogs = new TreeSet<TBinlog>((o1, o2) -> {
+            if (o1.getCommitSeq() < o2.getCommitSeq()) {
+                return -1;
+            } else if (o1.getCommitSeq() > o2.getCommitSeq()) {
+                return 1;
+            } else {
+                return 0;
+            }
+        });
         tableBinlogMap = new HashMap<Long, TableBinlog>();
     }
 
-    public void addBinlog(List<long> tableIds, TBinlog binlog) {
+    public void addBinlog(List<Long> tableIds, TBinlog binlog) {
         allBinlogs.add(binlog);
         if (tableIds != null) {
             for (long tableId : tableIds) {
@@ -53,6 +60,10 @@ public class DBBinlog {
         }
     }
 
+    public long getDbId() {
+        return dbId;
+    }
+
     public TBinlog getBinlog(long tableId, long commitSeq) {
         if (tableId >= 0) {
             TableBinlog tableBinlog = tableBinlogMap.get(tableId);
@@ -62,20 +73,9 @@ public class DBBinlog {
             return tableBinlog.getBinlog(commitSeq);
         }
 
-        // get all db binlog, get first binlog from internal binlogs by > commitSeq
-        // use java upperBound to get binlog
-        int index = Collections.binarySearch(allBinlogs, commitSeq, new Comparator<TBinlog>() {
-            @Override
-            public int compare(TBinlog o1, TBinlog o2) {
-                return Long.compare(o1.getCommitSeq(), o2.getCommitSeq());
-            }
-        });
-        if (index < 0) {
-            index = -index - 1;
-        }
-        if (index >= allBinlogs.size()) {
-            return null;
-        }
-        return allBinlogs.get(index);
+        // get first binlog from internal allBinlogs whose commitSeq  > commitSeq
+        TBinlog guard = new TBinlog();
+        guard.setCommitSeq(commitSeq);
+        return allBinlogs.higher(guard);
     }
 }

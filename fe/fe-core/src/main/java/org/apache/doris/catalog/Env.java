@@ -80,7 +80,6 @@ import org.apache.doris.analysis.UninstallPluginStmt;
 import org.apache.doris.backup.BackupHandler;
 import org.apache.doris.binlog.BinlogManager;
 import org.apache.doris.blockrule.SqlBlockRuleMgr;
-import org.apache.doris.catalog.BinlogConfig;
 import org.apache.doris.catalog.ColocateTableIndex.GroupId;
 import org.apache.doris.catalog.DistributionInfo.DistributionInfoType;
 import org.apache.doris.catalog.MaterializedIndex.IndexExtState;
@@ -2769,7 +2768,8 @@ public class Env {
     }
 
     public static void getDdlStmt(TableIf table, List<String> createTableStmt, List<String> addPartitionStmt,
-            List<String> createRollupStmt, boolean separatePartition, boolean hidePassword, long specificVersion) {
+                                  List<String> createRollupStmt, boolean separatePartition, boolean hidePassword,
+                                  long specificVersion) {
         getDdlStmt(null, null, table, createTableStmt, addPartitionStmt, createRollupStmt, separatePartition,
                 hidePassword, false, specificVersion, false);
     }
@@ -2780,8 +2780,10 @@ public class Env {
      * @param getDdlForLike Get schema for 'create table like' or not. when true, without hidden columns.
      */
     public static void getDdlStmt(DdlStmt ddlStmt, String dbName, TableIf table, List<String> createTableStmt,
-            List<String> addPartitionStmt, List<String> createRollupStmt, boolean separatePartition,
-            boolean hidePassword, boolean getDdlForLike, long specificVersion, boolean getBriefDdl) {
+                                  List<String> addPartitionStmt, List<String> createRollupStmt,
+                                  boolean separatePartition,
+                                  boolean hidePassword, boolean getDdlForLike, long specificVersion,
+                                  boolean getBriefDdl) {
         StringBuilder sb = new StringBuilder();
 
         // 1. create table
@@ -2861,9 +2863,9 @@ public class Env {
                 // and get a ddl schema without key type and key columns
             } else {
                 sb.append("\n").append(table.getType() == TableType.OLAP
-                    ? keySql
-                    : keySql.substring("DUPLICATE ".length()))
-                    .append("(");
+                                ? keySql
+                                : keySql.substring("DUPLICATE ".length()))
+                        .append("(");
                 List<String> keysColumnNames = Lists.newArrayList();
                 for (Column column : olapTable.getBaseSchema()) {
                     if (column.isKey()) {
@@ -3269,12 +3271,12 @@ public class Env {
     }
 
     public boolean unprotectDropTable(Database db, Table table, boolean isForceDrop, boolean isReplay,
-            Long recycleTime) {
+                                      Long recycleTime) {
         return getInternalCatalog().unprotectDropTable(db, table, isForceDrop, isReplay, recycleTime);
     }
 
     public void replayDropTable(Database db, long tableId, boolean isForceDrop,
-            Long recycleTime) throws MetaNotFoundException {
+                                Long recycleTime) throws MetaNotFoundException {
         getInternalCatalog().replayDropTable(db, tableId, isForceDrop, recycleTime);
     }
 
@@ -3707,7 +3709,7 @@ public class Env {
     }
 
     public static short calcShortKeyColumnCount(List<Column> columns, Map<String, String> properties,
-                boolean isKeysRequired) throws DdlException {
+                                                boolean isKeysRequired) throws DdlException {
         List<Column> indexColumns = new ArrayList<Column>();
         for (Column column : columns) {
             if (column.isKey()) {
@@ -3927,7 +3929,7 @@ public class Env {
 
     // the invoker should keep table's write lock
     public void modifyTableColocate(Database db, OlapTable table, String assignedGroup, boolean isReplay,
-            GroupId assignedGroupId)
+                                    GroupId assignedGroupId)
             throws DdlException {
 
         String oldGroup = table.getColocateGroup();
@@ -4157,7 +4159,7 @@ public class Env {
     }
 
     private void renameColumn(Database db, OlapTable table, String colName,
-            String newColName, boolean isReplay) throws DdlException {
+                              String newColName, boolean isReplay) throws DdlException {
         if (table.getState() != OlapTableState.NORMAL) {
             throw new DdlException("Table[" + table.getName() + "] is under " + table.getState());
         }
@@ -4400,8 +4402,8 @@ public class Env {
             tableProperty.modifyTableProperties(properties);
         }
         tableProperty.buildInMemory()
-        .buildStoragePolicy().
-        .buildCcrEnable();
+                .buildStoragePolicy()
+                .buildCcrEnable();
 
         // need to update partition info meta
         for (Partition partition : table.getPartitions()) {
@@ -4420,7 +4422,7 @@ public class Env {
         table.setBinlogConfig(newBinlogConfig);
 
         ModifyTablePropertyOperationLog info = new ModifyTablePropertyOperationLog(db.getId(), table.getId(),
-                properties);
+                newBinlogConfig.toProperties());
         editLog.logModifyInMemory(info);
     }
 
@@ -4467,7 +4469,8 @@ public class Env {
     }
 
     public void modifyDefaultDistributionBucketNum(Database db, OlapTable olapTable,
-            ModifyDistributionClause modifyDistributionClause) throws DdlException {
+                                                   ModifyDistributionClause modifyDistributionClause)
+            throws DdlException {
         olapTable.writeLockOrDdlException();
         try {
             if (olapTable.isColocateTable()) {

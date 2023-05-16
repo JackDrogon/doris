@@ -26,6 +26,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.gson.annotations.SerializedName;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -35,7 +36,7 @@ public class UpsertRecord {
             @SerializedName(value = "partitionId")
             public long partitionId;
             @SerializedName(value = "version")
-            public long version; 
+            public long version;
         }
 
         @SerializedName(value = "partitionRecords")
@@ -59,6 +60,8 @@ public class UpsertRecord {
     // (label, db, table, [shard_id, partition_id, index_id, version, version_hash])
     @SerializedName(value = "txnId")
     private long txnId;
+    @SerializedName(value = "timeStamp")
+    private long timeStamp;
     @SerializedName(value = "label")
     private String label;
     @SerializedName(value = "dbId")
@@ -71,18 +74,23 @@ public class UpsertRecord {
     public UpsertRecord(long commitSeq, TransactionState state) {
         this.commitSeq = commitSeq;
         txnId = state.getTransactionId();
+        timeStamp = state.getFinishTime();
         label = state.getLabel();
         dbId = state.getDbId();
         tableRecords = Maps.newHashMap();
 
-        for (TableCommitInfo info: state.getIdToTableCommitInfos().values()) {
+        for (TableCommitInfo info : state.getIdToTableCommitInfos().values()) {
             TableRecord tableRecord = new TableRecord();
             tableRecords.put(info.getTableId(), tableRecord);
 
-            for (PartitionCommitInfo partitionCommitInfo: info.getIdToPartitionCommitInfo().values()) {
+            for (PartitionCommitInfo partitionCommitInfo : info.getIdToPartitionCommitInfo().values()) {
                 tableRecord.addPartitionRecord(partitionCommitInfo);
             }
         }
+    }
+
+    public long getTimestamp() {
+        return timeStamp;
     }
 
     public long getDbId() {
@@ -94,13 +102,7 @@ public class UpsertRecord {
     }
 
     public List<Long> getAllReleatedTableIds() {
-        List<Long> tabletIds = Lists.newArrayList();
-        for (TableRecord tableRecord: tableRecords.values()) {
-            for (PartitionRecord partitionRecord: tableRecord.partitionRecords) {
-                tabletIds.add(partitionRecord.partitionId);
-            }
-        }
-        return tabletIds;
+        return new ArrayList<>(tableRecords.keySet());
     }
 
     public String toJson() {

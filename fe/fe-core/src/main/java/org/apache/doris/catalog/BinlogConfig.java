@@ -18,6 +18,7 @@
 package org.apache.doris.catalog;
 
 import org.apache.doris.common.io.Text;
+import org.apache.doris.common.io.Writable;
 import org.apache.doris.common.util.PropertyAnalyzer;
 import org.apache.doris.persist.gson.GsonUtils;
 import org.apache.doris.thrift.TBinlogConfig;
@@ -27,8 +28,8 @@ import com.google.gson.annotations.SerializedName;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
-import java.util.Map;
 import java.util.HashMap;
+import java.util.Map;
 
 public class BinlogConfig implements Writable {
     @SerializedName("enable")
@@ -140,6 +141,7 @@ public class BinlogConfig implements Writable {
         if (!(obj instanceof BinlogConfig)) {
             return false;
         }
+
         BinlogConfig other = (BinlogConfig) obj;
         if (this.enable != other.enable) {
             return false;
@@ -150,10 +152,7 @@ public class BinlogConfig implements Writable {
         if (this.maxBytes != other.maxBytes) {
             return false;
         }
-        if (this.maxHistoryNums != other.maxHistoryNums) {
-            return false;
-        }
-        return true;
+        return this.maxHistoryNums == other.maxHistoryNums;
     }
 
     @Override

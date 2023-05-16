@@ -1471,9 +1471,16 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         }
 
         // step 3: abort txn
-        Env.getCurrentGlobalTransactionMgr().abortTransaction(db.getId(), request.getTxnId(),
+        long dbId = db.getId();
+        DatabaseTransactionMgr dbTransactionMgr = Env.getCurrentGlobalTransactionMgr().getDatabaseTransactionMgr(dbId);
+        TransactionState transactionState = dbTransactionMgr.getTransactionState(request.getTxnId());
+        if (transactionState == null) {
+            throw new UserException("transaction [" + request.getTxnId() + "] not found");
+        }
+        List<Table> tableList = db.getTablesOnIdOrderIfExist(transactionState.getTableIdList());
+        Env.getCurrentGlobalTransactionMgr().abortTransaction(dbId, request.getTxnId(),
                 request.isSetReason() ? request.getReason() : "system cancel",
-                TxnCommitAttachment.fromThrift(request.getTxnCommitAttachment()));
+                TxnCommitAttachment.fromThrift(request.getTxnCommitAttachment()), tableList);
     }
 
     @Override
@@ -1934,16 +1941,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         result.setStatus(status);
         try {
             TGetBinlogResult tmpRes = getBinlogImpl(request, clientAddr);
-            result.setTxnId(tmpRes.getTxnId()).setDbId(tmpRes.getDbId());
-        } catch (DuplicatedRequestException e) {
-            // this is a duplicate request, just return previous txn id
-            LOG.warn("duplicate request for stream load. request id: {}, txn: {}", e.getDuplicatedRequestId(),
-                    e.getTxnId());
-            result.setTxnId(e.getTxnId());
-        } catch (LabelAlreadyUsedException e) {
-            status.setStatusCode(TStatusCode.LABEL_ALREADY_EXISTS);
-            status.addToErrorMsgs(e.getMessage());
-            result.setJobStatus(e.getJobStatus());
+            result.setBinlogs(tmpRes.getBinlogs());
         } catch (UserException e) {
             LOG.warn("failed to begin: {}", e.getMessage());
             status.setStatusCode(TStatusCode.ANALYSIS_ERROR);
@@ -1965,7 +1963,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
 
         // step 1: check auth
         if (Strings.isNullOrEmpty(request.getToken())) {
-            checkPasswordAndPrivs(cluster, request.getUser(), request.getPasswd(), request.getDb(), request.getTables(),
+            checkPasswordAndPrivs(cluster, request.getUser(), request.getPasswd(), request.getDb(), request.getTable(),
                     request.getUserIp(), PrivPredicate.LOAD);
         }
 
@@ -1984,22 +1982,24 @@ public class FrontendServiceImpl implements FrontendService.Iface {
 
         // step 4: fetch all tableIds
         // lookup tables && convert into tableIdList
-        List<Long> tableIdList = Lists.newArrayList();
-        for (String tblName : request.getTables()) {
-            String fullTblName = ClusterNamespace.getFullName(cluster, tblName);
+        long tableId = -1;
+        String tableName = request.getTable();
+        if (!Strings.isNullOrEmpty(tableName)) {
+            String fullTblName = ClusterNamespace.getFullName(cluster, tableName);
             Table table = db.getTableOrMetaException(fullTblName, TableType.OLAP);
             if (table == null) {
                 throw new UserException("unknown table, table=" + fullTblName);
             }
-            tableIdList.add(table.getId());
+            tableId = table.getId();
         }
 
         // step 6: get binlog
         TGetBinlogResult result = new TGetBinlogResult();
-        long startCommitSeq = request.getStartCommitSeq();
-        List<TBinlog> binlogs = env.getBinlogManager().getBinlog(dbId, tableIdList, startCommitSeq);
+        long prevCommitSeq = request.getPrevCommitSeq();
+        TBinlog binlog = env.getBinlogManager().getBinlog(dbId, tableId, prevCommitSeq);
+        List<TBinlog> binlogs = Lists.newArrayList();
+        binlogs.add(binlog);
         result.setBinlogs(binlogs);
         return result;
     }
 }
-

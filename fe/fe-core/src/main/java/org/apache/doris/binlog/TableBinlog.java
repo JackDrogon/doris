@@ -19,18 +19,24 @@ package org.apache.doris.binlog;
 
 import org.apache.doris.thrift.TBinlog;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.TreeSet;
 
 public class TableBinlog {
     private long tableId;
-    private List<TBinlog> binlogs;
+    private TreeSet<TBinlog> binlogs;
 
     public TableBinlog(long tableId) {
         this.tableId = tableId;
-        binlogs = new ArrayList<TBinlog>();
+        // binlogs treeset order by commitSeq
+        binlogs = new TreeSet<TBinlog>((o1, o2) -> {
+            if (o1.getCommitSeq() < o2.getCommitSeq()) {
+                return -1;
+            } else if (o1.getCommitSeq() > o2.getCommitSeq()) {
+                return 1;
+            } else {
+                return 0;
+            }
+        });
     }
 
     public long getTableId() {
@@ -42,19 +48,9 @@ public class TableBinlog {
     }
 
     public TBinlog getBinlog(long commitSeq) {
-        // use java upperBound to get binlog
-        int index = Collections.binarySearch(binlogs, commitSeq, new Comparator<TBinlog>() {
-            @Override
-            public int compare(TBinlog o1, TBinlog o2) {
-                return Long.compare(o1.getCommitSeq(), o2.getCommitSeq());
-            }
-        });
-        if (index < 0) {
-            index = -index - 1;
-        }
-        if (index >= binlogs.size()) {
-            return null;
-        }
-        return binlogs.get(index);
+        // return first binlog whose commitSeq > commitSeq
+        TBinlog guard = new TBinlog();
+        guard.setCommitSeq(commitSeq);
+        return binlogs.higher(guard);
     }    
 }

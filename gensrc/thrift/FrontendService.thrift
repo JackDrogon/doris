@@ -941,10 +941,10 @@ struct TGetBinlogRequest {
     2: required string user
     3: required string passwd
     4: required string db
-    5: required list<string> tables
+    5: optional string table
     6: optional string user_ip
     7: optional string token
-    8: required i64 start_commit_seq
+    8: required i64 prev_commit_seq
 }
 
 enum TBinlogType {

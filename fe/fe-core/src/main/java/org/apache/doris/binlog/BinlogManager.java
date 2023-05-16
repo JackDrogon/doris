@@ -17,20 +17,20 @@
 
 package org.apache.doris.binlog;
 
+import org.apache.doris.common.Pair;
 import org.apache.doris.thrift.TBinlog;
 import org.apache.doris.thrift.TBinlogType;
-import org.apache.doris.common.Pair;
 
+import com.google.common.collect.Maps;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import com.google.common.collect.Maps;
 
-import java.util.Map;
-import java.util.List;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-class TBinlogManager {
+public class BinlogManager {
     private static final Logger LOG = LogManager.getLogger(BinlogManager.class);
 
     private ReentrantReadWriteLock lock;
@@ -38,7 +38,7 @@ class TBinlogManager {
     // Pair(commitSeq, timestamp), used for gc
     private List<Pair<Long, Long>> timestamps;
 
-    public TBinlogManager() {
+    public BinlogManager() {
         lock = new ReentrantReadWriteLock();
         dbBinlogMap = Maps.newHashMap();
         timestamps = new ArrayList<Pair<Long, Long>>();
@@ -61,14 +61,14 @@ class TBinlogManager {
         List<Long> tableId = upsertRecord.getAllReleatedTableIds();
         long commitSeq = upsertRecord.getCommitSeq();
         long timestamp = upsertRecord.getTimestamp();
-        TBinlog binlog = new TBinlog(commitSeq, timestamp, TBinlogType.UPSERT, upsertRecord.toJson())
+        TBinlog binlog = new TBinlog(commitSeq, timestamp, TBinlogType.UPSERT, upsertRecord.toJson());
         addBinlog(dbId, tableId, binlog);
     }
 
     // get binlog by dbId, return first binlog.version > version
     public TBinlog getBinlog(long dbId, long tableId, long commitSeq) {
         lock.readLock().lock();
-        Map<Long, DBBinlog> dbBinlog = dbBinlogMap.get(dbId);
+        DBBinlog dbBinlog = dbBinlogMap.get(dbId);
         if (dbBinlog == null) {
             LOG.warn("dbBinlog not found. dbId: {}", dbId);
             return null;
@@ -76,18 +76,19 @@ class TBinlogManager {
 
         TBinlog binlog = dbBinlog.getBinlog(tableId, commitSeq);
         lock.readLock().unlock();
+        return binlog;
     }
 
     // gc binlog, remove all binlog timestamp < minTimestamp
     // TODO(Drogon): get minCommitSeq from timestamps
     public void gc(long minTimestamp) {
-        lock.writeLock().lock();
-        for (Pair<Long, Long> pair : timestamps) {
-            if (pair.first > version) {
-                break;
-            }
-            timestamps.remove(pair);
-        }
-        lock.writeLock().unlock();
+        // lock.writeLock().lock();
+        // for (Pair<Long, Long> pair : timestamps) {
+        //     if (pair.first > version) {
+        //         break;
+        //     }
+        //     timestamps.remove(pair);
+        // }
+        // lock.writeLock().unlock();
     }
 }
