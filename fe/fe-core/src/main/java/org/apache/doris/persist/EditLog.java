@@ -24,6 +24,7 @@ import org.apache.doris.backup.BackupJob;
 import org.apache.doris.backup.Repository;
 import org.apache.doris.backup.RestoreJob;
 import org.apache.doris.binlog.UpsertRecord;
+import org.apache.doris.binlog.AddPartitionRecord;
 import org.apache.doris.blockrule.SqlBlockRule;
 import org.apache.doris.catalog.BrokerMgr;
 import org.apache.doris.catalog.Database;
@@ -81,7 +82,7 @@ import org.apache.doris.resource.resourcegroup.ResourceGroup;
 import org.apache.doris.system.Backend;
 import org.apache.doris.system.Frontend;
 import org.apache.doris.transaction.TransactionState;
-
+import org.apache.hadoop.hive.metastore.api.AddPartitionsResult;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -516,6 +517,7 @@ public class EditLog {
                     UpsertRecord upsertRecord = new UpsertRecord(logId, state);
                     LOG.info("logid: {}, upsert record: {}", logId, upsertRecord);
                     LOG.debug("opcode: {}, tid: {}", opCode, state.getTransactionId());
+                    Env.getCurrentEnv().getBinlogManager().addUpsertRecord(upsertRecord);
                     break;
                 }
                 case OperationType.OP_DELETE_TRANSACTION_STATE: {
@@ -1136,7 +1138,8 @@ public class EditLog {
     }
 
     public void logCreateDb(Database db) {
-        logEdit(OperationType.OP_CREATE_DB, db);
+        long logId = logEdit(OperationType.OP_CREATE_DB, db);
+        LOG.info("log create db: {}, logId: {}", db, logId);
     }
 
     public void logDropDb(DropDbInfo dropDbInfo) {
@@ -1164,8 +1167,11 @@ public class EditLog {
     }
 
     public void logAddPartition(PartitionPersistInfo info) {
-        LOG.info("EditLog logAddPartition: {}", info);
-        logEdit(OperationType.OP_ADD_PARTITION, info);
+        long logId = logEdit(OperationType.OP_ADD_PARTITION, info);
+        LOG.info("log add partition: {}, logId: {}", info, logId);
+        AddPartitionRecord record = new AddPartitionRecord(logId, info);
+        Env.getCurrentEnv().getBinlogManager().addAddPartitionRecord(record);
+        LOG.info("EditLog upsert record: {}", record.toString());
     }
 
     public void logDropPartition(DropPartitionInfo info) {
@@ -1377,8 +1383,9 @@ public class EditLog {
     // for TransactionState
     public void logInsertTransactionState(TransactionState transactionState) {
         long logId = logEdit(OperationType.OP_UPSERT_TRANSACTION_STATE, transactionState);
-        UpsertRecord upsertRecord = new UpsertRecord(logId, transactionState);
-        LOG.info("EditLog upsert record: {}", upsertRecord);
+        UpsertRecord record = new UpsertRecord(logId, transactionState);
+        Env.getCurrentEnv().getBinlogManager().addUpsertRecord(record);
+        LOG.info("EditLog upsert record: {}", record.toString());
     }
 
     public void logBackupJob(BackupJob job) {

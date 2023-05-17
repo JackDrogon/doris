@@ -3222,7 +3222,7 @@ bool Tablet::can_add_binlog(uint64_t total_binlog_size) const {
 }
 
 bool Tablet::is_enable_binlog() {
-    return config::enable_binlog && tablet_meta()->binlog_config().is_enable();
+    return config::enable_feature_binlog && tablet_meta()->binlog_config().is_enable();
 }
 
 void Tablet::set_binlog_config(BinlogConfig binlog_config) {

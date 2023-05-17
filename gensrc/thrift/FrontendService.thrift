@@ -949,6 +949,8 @@ struct TGetBinlogRequest {
 
 enum TBinlogType {
   UPSERT = 0,
+  ADD_PARTITION = 1,
+  CREATE_TABLE = 2,
 }
 
 struct TBinlog {
@@ -960,7 +962,9 @@ struct TBinlog {
 
 struct TGetBinlogResult {
     1: required Status.TStatus status
-    2: optional list<TBinlog> binlogs
+    2: optional i64 next_commit_seq
+    3: optional list<TBinlog> binlogs
+    4: optional string fe_version
 }
 
 service FrontendService {

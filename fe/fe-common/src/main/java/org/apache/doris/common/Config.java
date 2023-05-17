@@ -1991,5 +1991,5 @@ public class Config extends ConfigBase {
     public static boolean show_details_for_unaccessible_tablet = false;
 
     @ConfField(mutable = false, masterOnly = false)
-    public static boolean enable_binlog = false;
+    public static boolean enable_feature_binlog = false;
 }

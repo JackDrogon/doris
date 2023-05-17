@@ -60,11 +60,22 @@ public class BinlogManager {
     public void addUpsertRecord(UpsertRecord upsertRecord) {
         LOG.info("add upsert record. upsertRecord: {}", upsertRecord);
         long dbId = upsertRecord.getDbId();
-        List<Long> tableId = upsertRecord.getAllReleatedTableIds();
+        List<Long> tableIds = upsertRecord.getAllReleatedTableIds();
         long commitSeq = upsertRecord.getCommitSeq();
         long timestamp = upsertRecord.getTimestamp();
         TBinlog binlog = new TBinlog(commitSeq, timestamp, TBinlogType.UPSERT, upsertRecord.toJson());
-        addBinlog(dbId, tableId, binlog);
+        addBinlog(dbId, tableIds, binlog);
+    }
+
+    public void addAddPartitionRecord(AddPartitionRecord addPartitionRecord) {
+        LOG.info("add partition record. partitionRecord: {}", addPartitionRecord);
+        long dbId = addPartitionRecord.getDbId();
+        List<Long> tableIds = new ArrayList<Long>();
+        tableIds.add(addPartitionRecord.getTableId());
+        long commitSeq = addPartitionRecord.getCommitSeq();
+        long timestamp = -1;
+        TBinlog binlog = new TBinlog(commitSeq, timestamp, TBinlogType.ADD_PARTITION, addPartitionRecord.toJson());
+        addBinlog(dbId, tableIds, binlog);
     }
 
     // get binlog by dbId, return first binlog.version > version
