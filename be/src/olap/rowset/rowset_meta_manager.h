@@ -48,11 +48,11 @@ public:
     static Status get_json_rowset_meta(OlapMeta* meta, TabletUid tablet_uid,
                                        const RowsetId& rowset_id, std::string* json_rowset_meta);
 
-    // TODO(Drogon): refactor save && save_with_binlog to one, adapt to ut temperately
+    // TODO(Drogon): refactor save && _save_with_binlog to one, adapt to ut temperately
+    static Status save(OlapMeta* meta, TabletUid tablet_uid, const RowsetId& rowset_id,
+                       const RowsetMetaPB& rowset_meta_pb, bool enable_binlog);
     static Status save(OlapMeta* meta, TabletUid tablet_uid, const RowsetId& rowset_id,
                        const RowsetMetaPB& rowset_meta_pb);
-    static Status save_with_binlog(OlapMeta* meta, TabletUid tablet_uid, const RowsetId& rowset_id,
-                                   const RowsetMetaPB& rowset_meta_pb);
     static std::vector<std::string> get_binlog_filenames(OlapMeta* meta, TabletUid tablet_uid,
                                                          std::string_view binlog_version,
                                                          int64_t segment_idx);
@@ -69,6 +69,10 @@ public:
             std::function<bool(const TabletUid&, const RowsetId&, const std::string&)> const& func);
 
     static Status load_json_rowset_meta(OlapMeta* meta, const std::string& rowset_meta_path);
+
+private:
+    static Status _save_with_binlog(OlapMeta* meta, TabletUid tablet_uid, const RowsetId& rowset_id,
+                                    const RowsetMetaPB& rowset_meta_pb);
 };
 
 } // namespace doris

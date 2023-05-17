@@ -217,7 +217,7 @@ Status TxnManager::commit_txn(OlapMeta* meta, TPartitionId partition_id,
 
     std::unique_lock<std::mutex> txn_lock(_get_txn_lock(transaction_id));
     // this while loop just run only once, just for if break
-    while (true) {
+    do {
         // get tx
         std::shared_lock rdlock(_get_txn_map_lock(transaction_id));
         txn_tablet_map_t& txn_tablet_map = _get_txn_tablet_map(transaction_id);
@@ -256,8 +256,10 @@ Status TxnManager::commit_txn(OlapMeta* meta, TPartitionId partition_id,
                          << ", exist rowset_id: " << load_info.rowset->rowset_id()
                          << ", new rowset_id: " << rowset_ptr->rowset_id();
             return Status::Error<PUSH_TRANSACTION_ALREADY_EXIST>();
+        } else {
+            break;
         }
-    }
+    } while (false);
 
     // if not in recovery mode, then should persist the meta to meta env
     // save meta need access disk, it maybe very slow, so that it is not in global txn lock
@@ -362,18 +364,20 @@ Status TxnManager::publish_txn(OlapMeta* meta, TPartitionId partition_id,
     }
 
     /// Step 3:  add to binlog
-    // auto enable_binlog = config::storage_enable_binlog && tablet->is_binlog_enabled();
-    auto status = rowset->add_to_binlog();
-    if (!status.ok()) {
-        LOG(WARNING) << "add rowset to binlog failed. when publish txn rowset_id:"
-                     << rowset->rowset_id() << ", tablet id: " << tablet_id
-                     << ", txn id:" << transaction_id;
-        return Status::Error<ROWSET_ADD_TO_BINLOG_FAILED>();
+    auto enable_binlog = tablet->is_enable_binlog();
+    if (enable_binlog) {
+        auto status = rowset->add_to_binlog();
+        if (!status.ok()) {
+            LOG(WARNING) << "add rowset to binlog failed. when publish txn rowset_id:"
+                         << rowset->rowset_id() << ", tablet id: " << tablet_id
+                         << ", txn id:" << transaction_id;
+            return Status::Error<ROWSET_ADD_TO_BINLOG_FAILED>();
+        }
     }
 
     /// Step 4: save meta
-    status = RowsetMetaManager::save_with_binlog(meta, tablet_uid, rowset->rowset_id(),
-                                                 rowset->rowset_meta()->get_rowset_pb());
+    auto status = RowsetMetaManager::save(meta, tablet_uid, rowset->rowset_id(),
+                                          rowset->rowset_meta()->get_rowset_pb(), enable_binlog);
     if (!status.ok()) {
         LOG(WARNING) << "save committed rowset failed. when publish txn rowset_id:"
                      << rowset->rowset_id() << ", tablet id: " << tablet_id

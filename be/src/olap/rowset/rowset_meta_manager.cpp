@@ -93,6 +93,14 @@ Status RowsetMetaManager::get_json_rowset_meta(OlapMeta* meta, TabletUid tablet_
     }
     return Status::OK();
 }
+Status RowsetMetaManager::save(OlapMeta* meta, TabletUid tablet_uid, const RowsetId& rowset_id,
+                               const RowsetMetaPB& rowset_meta_pb, bool enable_binlog) {
+    if (enable_binlog) {
+        return _save_with_binlog(meta, tablet_uid, rowset_id, rowset_meta_pb);
+    } else {
+        return save(meta, tablet_uid, rowset_id, rowset_meta_pb);
+    }
+}
 
 Status RowsetMetaManager::save(OlapMeta* meta, TabletUid tablet_uid, const RowsetId& rowset_id,
                                const RowsetMetaPB& rowset_meta_pb) {
@@ -107,9 +115,9 @@ Status RowsetMetaManager::save(OlapMeta* meta, TabletUid tablet_uid, const Rowse
     return meta->put(META_COLUMN_FAMILY_INDEX, key, value);
 }
 
-Status RowsetMetaManager::save_with_binlog(OlapMeta* meta, TabletUid tablet_uid,
-                                           const RowsetId& rowset_id,
-                                           const RowsetMetaPB& rowset_meta_pb) {
+Status RowsetMetaManager::_save_with_binlog(OlapMeta* meta, TabletUid tablet_uid,
+                                            const RowsetId& rowset_id,
+                                            const RowsetMetaPB& rowset_meta_pb) {
     // create rowset write data
     std::string rowset_key =
             fmt::format("{}{}_{}", ROWSET_PREFIX, tablet_uid.to_string(), rowset_id.to_string());

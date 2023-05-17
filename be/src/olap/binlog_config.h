@@ -37,7 +37,7 @@ public:
     BinlogConfig& operator=(BinlogConfig&&) = default;
     ~BinlogConfig() = default;
 
-    bool enable() const { return _enable; }
+    bool is_enable() const { return _enable; }
     void set_enable(bool enable) { _enable = enable; }
 
     int64_t ttl_seconds() const { return _ttl_seconds; }

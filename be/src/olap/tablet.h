@@ -497,7 +497,8 @@ public:
     int64_t get_table_id() { return _tablet_meta->table_id(); }
 
     // binlog releated functions
-    bool is_binlog_enabled() const { return _binlog_enabled; }
+    bool is_enable_binlog();
+    bool is_binlog_enabled() { return _binlog_enabled; }
     int64_t binlog_ttl_ms() const { return _binlog_ttl_ms; }
     int64_t binlog_max_size() const { return _binlog_max_size; }
 

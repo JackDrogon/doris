@@ -45,6 +45,7 @@ public class BinlogManager {
     }
 
     private void addBinlog(long dbId, List<Long> tableIds, TBinlog binlog) {
+        LOG.info("add binlog. dbId: {}, tableIds: {}, binlog: {}", dbId, tableIds, binlog);
         lock.writeLock().lock();
         DBBinlog dbBinlog = dbBinlogMap.get(dbId);
         if (dbBinlog == null) {
@@ -57,6 +58,7 @@ public class BinlogManager {
     }
 
     public void addUpsertRecord(UpsertRecord upsertRecord) {
+        LOG.info("add upsert record. upsertRecord: {}", upsertRecord);
         long dbId = upsertRecord.getDbId();
         List<Long> tableId = upsertRecord.getAllReleatedTableIds();
         long commitSeq = upsertRecord.getCommitSeq();
@@ -67,6 +69,7 @@ public class BinlogManager {
 
     // get binlog by dbId, return first binlog.version > version
     public TBinlog getBinlog(long dbId, long tableId, long commitSeq) {
+        LOG.info("get binlog. dbId: {}, tableId: {}, commitSeq: {}", dbId, tableId, commitSeq);
         lock.readLock().lock();
         DBBinlog dbBinlog = dbBinlogMap.get(dbId);
         if (dbBinlog == null) {

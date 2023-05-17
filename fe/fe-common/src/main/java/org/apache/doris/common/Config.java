@@ -18,6 +18,7 @@
 package org.apache.doris.common;
 
 import org.apache.doris.common.ExperimentalUtil.ExperimentalType;
+import org.apache.logging.log4j.core.config.plugins.PluginConfiguration;
 
 public class Config extends ConfigBase {
 
@@ -1988,4 +1989,7 @@ public class Config extends ConfigBase {
                     + "the detailed information of all the replicas of the tablet,"
                     + " including the specific reason why they are unqueryable, will be printed out."})
     public static boolean show_details_for_unaccessible_tablet = false;
+
+    @ConfField(mutable = false, masterOnly = false)
+    public static boolean enable_binlog = false;
 }

@@ -3221,6 +3221,10 @@ bool Tablet::can_add_binlog(uint64_t total_binlog_size) const {
     return _data_dir->reach_capacity_limit(total_binlog_size);
 }
 
+bool Tablet::is_enable_binlog() {
+    return config::enable_binlog && tablet_meta()->binlog_config().is_enable();
+}
+
 void Tablet::set_binlog_config(BinlogConfig binlog_config) {
     tablet_meta()->set_binlog_config(std::move(binlog_config));
 }
