@@ -23,15 +23,19 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class DBBinlog {
     private long dbId;
+    // guard for allBinlogs && tableBinlogMap
+    private ReentrantReadWriteLock lock;
     // all binlogs contain table binlogs && create table binlog etc ...
     private TreeSet<TBinlog> allBinlogs;
     // table binlogs
     private Map<Long, TableBinlog> tableBinlogMap;
 
     public DBBinlog(long dbId) {
+        lock = new ReentrantReadWriteLock();
         this.dbId = dbId;
         // allBinlogs treeset order by commitSeq
         allBinlogs = new TreeSet<TBinlog>((o1, o2) -> {
@@ -47,8 +51,13 @@ public class DBBinlog {
     }
 
     public void addBinlog(List<Long> tableIds, TBinlog binlog) {
-        allBinlogs.add(binlog);
-        if (tableIds != null) {
+        lock.writeLock().lock();
+        try {
+            allBinlogs.add(binlog);
+            if (tableIds == null) {
+                return;
+            }
+
             for (long tableId : tableIds) {
                 TableBinlog tableBinlog = tableBinlogMap.get(tableId);
                 if (tableBinlog == null) {
@@ -57,6 +66,8 @@ public class DBBinlog {
                 }
                 tableBinlog.addBinlog(binlog);
             }
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 
@@ -65,17 +76,23 @@ public class DBBinlog {
     }
 
     public TBinlog getBinlog(long tableId, long commitSeq) {
-        if (tableId >= 0) {
-            TableBinlog tableBinlog = tableBinlogMap.get(tableId);
-            if (tableBinlog == null) {
-                return null;
+        lock.readLock().lock();
+        try {
+            if (tableId >= 0) {
+                TableBinlog tableBinlog = tableBinlogMap.get(tableId);
+                if (tableBinlog == null) {
+                    return null;
+                }
+                return tableBinlog.getBinlog(commitSeq);
             }
-            return tableBinlog.getBinlog(commitSeq);
-        }
 
-        // get first binlog from internal allBinlogs whose commitSeq  > commitSeq
-        TBinlog guard = new TBinlog();
-        guard.setCommitSeq(commitSeq);
-        return allBinlogs.higher(guard);
+            // get first binlog from internal allBinlogs whose commitSeq  > commitSeq
+            TBinlog guard = new TBinlog();
+            guard.setCommitSeq(commitSeq);
+            TBinlog binlog = allBinlogs.higher(guard);
+            return binlog;
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 }

@@ -20,13 +20,16 @@ package org.apache.doris.binlog;
 import org.apache.doris.thrift.TBinlog;
 
 import java.util.TreeSet;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class TableBinlog {
     private long tableId;
+    private ReentrantReadWriteLock lock;
     private TreeSet<TBinlog> binlogs;
 
     public TableBinlog(long tableId) {
         this.tableId = tableId;
+        lock = new ReentrantReadWriteLock();
         // binlogs treeset order by commitSeq
         binlogs = new TreeSet<TBinlog>((o1, o2) -> {
             if (o1.getCommitSeq() < o2.getCommitSeq()) {
@@ -44,13 +47,23 @@ public class TableBinlog {
     }
 
     public void addBinlog(TBinlog binlog) {
-        binlogs.add(binlog);
+        lock.writeLock().lock();
+        try {
+            binlogs.add(binlog);
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     public TBinlog getBinlog(long commitSeq) {
-        // return first binlog whose commitSeq > commitSeq
-        TBinlog guard = new TBinlog();
-        guard.setCommitSeq(commitSeq);
-        return binlogs.higher(guard);
+        lock.readLock().lock();
+        try {
+            // return first binlog whose commitSeq > commitSeq
+            TBinlog guard = new TBinlog();
+            guard.setCommitSeq(commitSeq);
+            return binlogs.higher(guard);
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 }

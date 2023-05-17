@@ -46,51 +46,70 @@ public class BinlogManager {
 
     private void addBinlog(long dbId, List<Long> tableIds, TBinlog binlog) {
         LOG.info("add binlog. dbId: {}, tableIds: {}, binlog: {}", dbId, tableIds, binlog);
+
+        DBBinlog dbBinlog;
         lock.writeLock().lock();
-        DBBinlog dbBinlog = dbBinlogMap.get(dbId);
-        if (dbBinlog == null) {
-            dbBinlog = new DBBinlog(dbId);
-            dbBinlogMap.put(dbId, dbBinlog);
+        try {
+            dbBinlog = dbBinlogMap.get(dbId);
+            if (dbBinlog == null) {
+                dbBinlog = new DBBinlog(dbId);
+                dbBinlogMap.put(dbId, dbBinlog);
+            }
+            timestamps.add(Pair.of(binlog.getCommitSeq(), binlog.getTimestamp()));
+        } finally {
+            lock.writeLock().unlock();
         }
+
         dbBinlog.addBinlog(tableIds, binlog);
-        timestamps.add(Pair.of(binlog.getCommitSeq(), binlog.getTimestamp()));
-        lock.writeLock().unlock();
+    }
+
+    private void addBinlog(long dbId, List<Long> tableIds, long commitSeq, long timestamp, TBinlogType type, String data) {
+        TBinlog binlog = new TBinlog(commitSeq, timestamp, type, data);
+        addBinlog(dbId, tableIds, binlog);
     }
 
     public void addUpsertRecord(UpsertRecord upsertRecord) {
         LOG.info("add upsert record. upsertRecord: {}", upsertRecord);
+
         long dbId = upsertRecord.getDbId();
         List<Long> tableIds = upsertRecord.getAllReleatedTableIds();
         long commitSeq = upsertRecord.getCommitSeq();
         long timestamp = upsertRecord.getTimestamp();
-        TBinlog binlog = new TBinlog(commitSeq, timestamp, TBinlogType.UPSERT, upsertRecord.toJson());
-        addBinlog(dbId, tableIds, binlog);
+        TBinlogType type = TBinlogType.UPSERT;
+        String data = upsertRecord.toJson();
+
+        addBinlog(dbId, tableIds, commitSeq, timestamp, type, data);
     }
 
     public void addAddPartitionRecord(AddPartitionRecord addPartitionRecord) {
         LOG.info("add partition record. partitionRecord: {}", addPartitionRecord);
+
         long dbId = addPartitionRecord.getDbId();
         List<Long> tableIds = new ArrayList<Long>();
         tableIds.add(addPartitionRecord.getTableId());
         long commitSeq = addPartitionRecord.getCommitSeq();
         long timestamp = -1;
-        TBinlog binlog = new TBinlog(commitSeq, timestamp, TBinlogType.ADD_PARTITION, addPartitionRecord.toJson());
-        addBinlog(dbId, tableIds, binlog);
+        TBinlogType type = TBinlogType.ADD_PARTITION;
+        String data = addPartitionRecord.toJson();
+
+        addBinlog(dbId, tableIds, commitSeq, timestamp, type, data);
     }
 
     // get binlog by dbId, return first binlog.version > version
     public TBinlog getBinlog(long dbId, long tableId, long commitSeq) {
         LOG.info("get binlog. dbId: {}, tableId: {}, commitSeq: {}", dbId, tableId, commitSeq);
         lock.readLock().lock();
-        DBBinlog dbBinlog = dbBinlogMap.get(dbId);
-        if (dbBinlog == null) {
-            LOG.warn("dbBinlog not found. dbId: {}", dbId);
-            return null;
-        }
+        try {
+            DBBinlog dbBinlog = dbBinlogMap.get(dbId);
+            if (dbBinlog == null) {
+                LOG.warn("dbBinlog not found. dbId: {}", dbId);
+                return null;
+            }
 
-        TBinlog binlog = dbBinlog.getBinlog(tableId, commitSeq);
-        lock.readLock().unlock();
-        return binlog;
+            return dbBinlog.getBinlog(tableId, commitSeq);
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     // gc binlog, remove all binlog timestamp < minTimestamp
