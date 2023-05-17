@@ -887,6 +887,8 @@ void TaskWorkerPool::_update_tablet_meta_worker_thread_callback() {
                         tablet_meta_info.tablet_id,
                         tablet->tablet_meta()->binlog_config().to_string(),
                         new_binlog_config.to_string());
+                tablet->set_binlog_config(new_binlog_config);
+                need_to_save = true;
             }
             if (need_to_save) {
                 std::shared_lock rlock(tablet->get_header_lock());

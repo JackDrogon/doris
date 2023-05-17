@@ -679,7 +679,7 @@ Status StorageEngine::start_trash_sweep(double* usage, bool ignore_guard) {
         }
     }
 
-    _gc_binlogs();
+    // _gc_binlogs();
 
     if (usage != nullptr) {
         *usage = tmp_usage; // update usage
@@ -770,6 +770,8 @@ void StorageEngine::_clean_unused_rowset_metas() {
 }
 
 void StorageEngine::_gc_binlogs() {
+    LOG(INFO) << "start to gc binlogs";
+
     auto data_dirs = get_stores();
     struct tablet_info {
         std::string tablet_path;

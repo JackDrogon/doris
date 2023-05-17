@@ -3220,4 +3220,8 @@ std::vector<std::string> Tablet::get_binlog_filepath(std::string_view binlog_ver
 bool Tablet::can_add_binlog(uint64_t total_binlog_size) const {
     return _data_dir->reach_capacity_limit(total_binlog_size);
 }
+
+void Tablet::set_binlog_config(BinlogConfig binlog_config) {
+    tablet_meta()->set_binlog_config(std::move(binlog_config));
+}
 } // namespace doris

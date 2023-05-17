@@ -29,8 +29,8 @@ class BinlogConfigPB;
 class BinlogConfig {
 public:
     BinlogConfig() = default;
-    BinlogConfig(bool enable, int64_t ttl_seconds, int64_t max_bytes)
-            : _enable(enable), _ttl_seconds(ttl_seconds), _max_bytes(max_bytes) {}
+    BinlogConfig(bool enable, int64_t ttl_seconds, int64_t max_bytes, int64_t max_history_nums)
+            : _enable(enable), _ttl_seconds(ttl_seconds), _max_bytes(max_bytes), _max_history_nums(max_history_nums) {}
     BinlogConfig(const BinlogConfig&) = default;
     BinlogConfig& operator=(const BinlogConfig&) = default;
     BinlogConfig(BinlogConfig&&) = default;
@@ -46,6 +46,9 @@ public:
     int64_t max_bytes() const { return _max_bytes; }
     void set_max_bytes(int64_t max_bytes) { _max_bytes = max_bytes; }
 
+    int64_t max_history_nums() const { return _max_history_nums; }
+    void set_max_history_nums(int64_t max_history_nums) { _max_history_nums = max_history_nums; }
+
     BinlogConfig& operator=(const TBinlogConfig& config);
     BinlogConfig& operator=(const BinlogConfigPB& config);
 
@@ -56,6 +59,7 @@ private:
     bool _enable {false};
     int64_t _ttl_seconds {std::numeric_limits<int64_t>::max()};
     int64_t _max_bytes {std::numeric_limits<int64_t>::max()};
+    int64_t _max_history_nums {std::numeric_limits<int64_t>::max()};
 };
 
 } // namespace doris

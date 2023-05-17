@@ -301,6 +301,11 @@ Status TxnManager::publish_txn(OlapMeta* meta, TPartitionId partition_id,
                                TTransactionId transaction_id, TTabletId tablet_id,
                                SchemaHash schema_hash, TabletUid tablet_uid,
                                const Version& version) {
+    auto tablet = StorageEngine::instance()->tablet_manager()->get_tablet(tablet_id);
+    if (tablet == nullptr) {
+        return Status::OK();
+    }
+
     pair<int64_t, int64_t> key(partition_id, transaction_id);
     TabletInfo tablet_info(tablet_id, schema_hash, tablet_uid);
     RowsetSharedPtr rowset = nullptr;
@@ -337,10 +342,6 @@ Status TxnManager::publish_txn(OlapMeta* meta, TPartitionId partition_id,
     rowset->make_visible(version);
     // update delete_bitmap
     if (tablet_txn_info.unique_key_merge_on_write) {
-        auto tablet = StorageEngine::instance()->tablet_manager()->get_tablet(tablet_id);
-        if (tablet == nullptr) {
-            return Status::OK();
-        }
         std::unique_ptr<RowsetWriter> rowset_writer;
         _create_transient_rowset_writer(tablet, rowset->rowset_id(), rowset->num_segments(),
                                         &rowset_writer);
@@ -361,6 +362,7 @@ Status TxnManager::publish_txn(OlapMeta* meta, TPartitionId partition_id,
     }
 
     /// Step 3:  add to binlog
+    // auto enable_binlog = config::storage_enable_binlog && tablet->is_binlog_enabled();
     auto status = rowset->add_to_binlog();
     if (!status.ok()) {
         LOG(WARNING) << "add rowset to binlog failed. when publish txn rowset_id:"
@@ -380,7 +382,6 @@ Status TxnManager::publish_txn(OlapMeta* meta, TPartitionId partition_id,
     }
 
     // TODO(Drogon): remove these test codes
-    auto tablet = StorageEngine::instance()->tablet_manager()->get_tablet(tablet_id);
     auto version_str = fmt::format("{}", version.first);
     LOG(INFO) << fmt::format("{}", tablet->get_binlog_filepath(version_str));
 

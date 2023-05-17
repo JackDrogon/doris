@@ -41,6 +41,7 @@
 #include "common/config.h"
 #include "common/status.h"
 #include "olap/base_tablet.h"
+#include "olap/binlog_config.h"
 #include "olap/data_dir.h"
 #include "olap/olap_common.h"
 #include "olap/rowset/rowset.h"
@@ -499,6 +500,8 @@ public:
     bool is_binlog_enabled() const { return _binlog_enabled; }
     int64_t binlog_ttl_ms() const { return _binlog_ttl_ms; }
     int64_t binlog_max_size() const { return _binlog_max_size; }
+
+    void set_binlog_config(BinlogConfig binlog_config);
 
 private:
     Status _init_once_action();

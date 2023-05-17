@@ -270,6 +270,7 @@ message BinlogConfigPB {
     required bool enable = 1;
     required int64 ttl_seconds = 2;
     required int64 max_bytes = 3;
+    required int64 max_history_nums = 4;
 }
 
 message TabletMetaPB {
