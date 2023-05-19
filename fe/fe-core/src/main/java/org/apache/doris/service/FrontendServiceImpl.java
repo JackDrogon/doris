@@ -1054,10 +1054,9 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         // lookup tables && convert into tableIdList
         List<Long> tableIdList = Lists.newArrayList();
         for (String tblName : request.getTables()) {
-            String fullTblName = ClusterNamespace.getFullName(cluster, tblName);
-            Table table = db.getTableOrMetaException(fullTblName, TableType.OLAP);
+            Table table = db.getTableOrMetaException(tblName, TableType.OLAP);
             if (table == null) {
-                throw new UserException("unknown table, table=" + fullTblName);
+                throw new UserException("unknown table, table=" + tblName);
             }
             tableIdList.add(table.getId());
         }
