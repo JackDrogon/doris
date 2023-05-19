@@ -957,7 +957,9 @@ struct TBinlog {
     1: required i64 commit_seq
     2: required i64 timestamp
     3: required TBinlogType type
-    4: required string data
+    4: required i64 db_id
+    5: optional list<i64> table_ids
+    6: required string data
 }
 
 struct TGetBinlogResult {

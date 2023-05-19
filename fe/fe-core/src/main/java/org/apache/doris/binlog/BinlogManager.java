@@ -24,18 +24,31 @@ import org.apache.doris.thrift.TBinlogType;
 import com.google.common.collect.Maps;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.thrift.TException;
+import org.apache.thrift.protocol.TBinaryProtocol;
+import org.apache.thrift.transport.TMemoryBuffer;
+import org.apache.thrift.transport.TMemoryInputTransport;
+import org.apache.thrift.transport.TTransportException;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class BinlogManager {
     private static final Logger LOG = LogManager.getLogger(BinlogManager.class);
+    private static final int BUFFER_SIZE = 16 * 1024;
 
     private ReentrantReadWriteLock lock;
     private Map<Long, DBBinlog> dbBinlogMap;
     // Pair(commitSeq, timestamp), used for gc
+    // need UpsertRecord to add timestamps for gc
     private List<Pair<Long, Long>> timestamps;
 
     public BinlogManager() {
@@ -44,9 +57,10 @@ public class BinlogManager {
         timestamps = new ArrayList<Pair<Long, Long>>();
     }
 
-    private void addBinlog(long dbId, List<Long> tableIds, TBinlog binlog) {
-        LOG.info("add binlog. dbId: {}, tableIds: {}, binlog: {}", dbId, tableIds, binlog);
+    private void addBinlog(TBinlog binlog) {
+        LOG.info("add binlog : {}", binlog);
 
+        long dbId = binlog.getDbId();
         DBBinlog dbBinlog;
         lock.writeLock().lock();
         try {
@@ -55,17 +69,22 @@ public class BinlogManager {
                 dbBinlog = new DBBinlog(dbId);
                 dbBinlogMap.put(dbId, dbBinlog);
             }
-            timestamps.add(Pair.of(binlog.getCommitSeq(), binlog.getTimestamp()));
+            if (binlog.getTimestamp() > 0) {
+                timestamps.add(Pair.of(binlog.getCommitSeq(), binlog.getTimestamp()));
+            }
         } finally {
             lock.writeLock().unlock();
         }
 
-        dbBinlog.addBinlog(tableIds, binlog);
+        dbBinlog.addBinlog(binlog);
     }
 
     private void addBinlog(long dbId, List<Long> tableIds, long commitSeq, long timestamp, TBinlogType type, String data) {
-        TBinlog binlog = new TBinlog(commitSeq, timestamp, type, data);
-        addBinlog(dbId, tableIds, binlog);
+        TBinlog binlog = new TBinlog(commitSeq, timestamp, type, dbId, data);
+        if (tableIds != null && !tableIds.isEmpty()) {
+            binlog.setTableIds(tableIds);
+        }
+        addBinlog(binlog);
     }
 
     public void addUpsertRecord(UpsertRecord upsertRecord) {
@@ -115,13 +134,127 @@ public class BinlogManager {
     // gc binlog, remove all binlog timestamp < minTimestamp
     // TODO(Drogon): get minCommitSeq from timestamps
     public void gc(long minTimestamp) {
-        // lock.writeLock().lock();
-        // for (Pair<Long, Long> pair : timestamps) {
-        //     if (pair.first > version) {
-        //         break;
-        //     }
-        //     timestamps.remove(pair);
-        // }
-        // lock.writeLock().unlock();
+        lock.writeLock().lock();
+        long minCommitSeq = -1;
+        try {
+            // user iterator to remove element in timestamps
+            for (Iterator<Pair<Long, Long>> iterator = timestamps.iterator(); iterator.hasNext();) {
+                Pair<Long, Long> pair = iterator.next();
+                long commitSeq = pair.first;
+                long timestamp = pair.second;
+
+                if (timestamp >= minTimestamp) {
+                    break;
+                }
+
+                iterator.remove();
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+
+        if (minCommitSeq == -1) {
+            return;
+        }
+
+        lock.writeLock().lock();
     }
+
+    private static void writeTBinlogToStream(DataOutputStream dos, TBinlog binlog) throws TException, IOException {
+        TMemoryBuffer buffer = new TMemoryBuffer(BUFFER_SIZE);
+        TBinaryProtocol protocol = new TBinaryProtocol(buffer);
+        binlog.write(protocol);
+        byte[] data = buffer.getArray();
+        dos.writeInt(data.length);
+        dos.write(data);
+    }
+
+
+    // not thread safety, do this without lock
+    public long write(DataOutputStream dos, long checksum) throws IOException {
+        List<TBinlog> binlogs = new ArrayList<TBinlog>();
+        // Step 1: get all binlogs
+        for (DBBinlog dbBinlog : dbBinlogMap.values()) {
+            dbBinlog.getAllBinlogs(binlogs);
+        }
+        // sort binlogs by commitSeq
+        Collections.sort(binlogs, new Comparator<TBinlog>() {
+            @Override
+            public int compare(TBinlog o1, TBinlog o2) {
+                return Long.compare(o1.getCommitSeq(), o2.getCommitSeq());
+            }
+        });
+
+        // Step 2: write binlogs length
+        dos.writeInt(binlogs.size());
+
+        // Step 3: write all binlogs to dos
+        // binlog is a thrift type TBinlog
+        for (TBinlog binlog : binlogs) {
+            try {
+                writeTBinlogToStream(dos, binlog);
+            } catch (TException e) {
+                throw new IOException("failed to write binlog to TMemoryBuffer");
+            }
+        }
+
+        return checksum;
+    }
+
+    public void read(DataInputStream dis) throws IOException {
+        // Step 1: read binlogs length
+        int length = dis.readInt();
+
+        // Step 2: read all binlogs from dis && add binlog
+        TMemoryBuffer buffer;
+        TBinaryProtocol protocol;
+        try {
+            buffer = new TMemoryBuffer(BUFFER_SIZE);
+            protocol = new TBinaryProtocol(buffer);
+        } catch (TTransportException e) {
+            throw new IOException("failed to create TMemoryBuffer");
+        }
+
+        for (int i = 0; i < length; i++) {
+            TBinlog binlog = new TBinlog();
+            try {
+                binlog.read(protocol);
+            } catch (TException e) {
+                throw new IOException("failed to read binlog from TMemoryBuffer");
+            }
+            addBinlog(binlog);
+        }
+    }
+
+    public TBinlog readTBinlogFromStream(DataInputStream dis) throws TException, IOException {
+        // We assume that the first int is the length of the serialized data.
+        int length = dis.readInt();
+        byte[] data = new byte[length];
+        dis.readFully(data);
+        TMemoryInputTransport transport = new TMemoryInputTransport(data);
+        TBinaryProtocol protocol = new TBinaryProtocol(transport);
+        TBinlog binlog = new TBinlog();
+        binlog.read(protocol);
+        return binlog;
+    }
+
+    public long read(DataInputStream dis, long checksum) throws IOException {
+        // Step 1: read binlogs length
+        int size = dis.readInt();
+
+        // Step 2: read all binlogs from dis
+        for (int i = 0; i < size; i++) {
+            try {
+                TBinlog binlog = readTBinlogFromStream(dis);
+                addBinlog(binlog);
+            } catch (TException e) {
+                throw new IOException("failed to read binlog from TMemoryBuffer", e);
+            }
+        }
+
+        return checksum;
+    }
+
+    // remove DB
+    // remove Table
 }

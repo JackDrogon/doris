@@ -50,7 +50,8 @@ public class DBBinlog {
         tableBinlogMap = new HashMap<Long, TableBinlog>();
     }
 
-    public void addBinlog(List<Long> tableIds, TBinlog binlog) {
+    public void addBinlog(TBinlog binlog) {
+        List<Long> tableIds = binlog.getTableIds();
         lock.writeLock().lock();
         try {
             allBinlogs.add(binlog);
@@ -94,5 +95,10 @@ public class DBBinlog {
         } finally {
             lock.readLock().unlock();
         }
+    }
+
+    // not thread safety, do this without lock
+    public void getAllBinlogs(List<TBinlog> binlogs) {
+        binlogs.addAll(allBinlogs);
     }
 }

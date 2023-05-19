@@ -1910,6 +1910,13 @@ public class Env {
         return checksum;
     }
 
+    // load binlogs
+    public long loadBinlogs(DataInputStream dis, long checksum) throws IOException {
+        binlogManager.read(dis, checksum);
+        LOG.info("finished replay binlogMgr from image");
+        return checksum;
+    }
+
     public long loadColocateTableIndex(DataInputStream dis, long checksum) throws IOException {
         Env.getCurrentColocateIndex().readFields(dis);
         LOG.info("finished replay colocateTableIndex from image");
@@ -2242,6 +2249,12 @@ public class Env {
     public long saveGlobalFunction(CountingDataOutputStream out, long checksum) throws IOException {
         this.globalFunctionMgr.write(out);
         LOG.info("Save global function to image");
+        return checksum;
+    }
+
+    public long saveBinlogs(CountingDataOutputStream out, long checksum) throws IOException {
+        this.binlogManager.write(out, checksum);
+        LOG.info("Save binlogs to image");
         return checksum;
     }
 
