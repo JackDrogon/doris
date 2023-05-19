@@ -187,6 +187,7 @@ public class BinlogManager {
 
         // Step 2: write binlogs length
         dos.writeInt(binlogs.size());
+        LOG.info("write binlogs length: {}", binlogs.size());
 
         // Step 3: write all binlogs to dos
         // binlog is a thrift type TBinlog
@@ -241,6 +242,7 @@ public class BinlogManager {
     public long read(DataInputStream dis, long checksum) throws IOException {
         // Step 1: read binlogs length
         int size = dis.readInt();
+        LOG.info("read binlogs length: {}", size);
 
         // Step 2: read all binlogs from dis
         for (int i = 0; i < size; i++) {
