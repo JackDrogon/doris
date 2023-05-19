@@ -56,9 +56,7 @@ inline auto make_binlog_data_key(const TabletUid& tablet_uid, int64_t version,
 }
 
 inline auto make_binlog_filename_key(const TabletUid& tablet_uid, std::string_view version) {
-    // TODO(Drogon): use fmt::format not convert to version_num, only string with length prefix '0'
-    int64_t version_num = std::atoll(version.data());
-    return fmt::format("{}meta_{}_{:020d}_", kBinlogPrefix, tablet_uid.to_string(), version_num);
+    return fmt::format("{}meta_{}_{:0>20}_", kBinlogPrefix, tablet_uid.to_string(), version);
 }
 
 inline auto make_binlog_meta_key_prefix(int64_t tablet_id) {

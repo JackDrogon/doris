@@ -410,6 +410,8 @@ Status BetaRowset::add_to_binlog() {
     std::string binlog_dir;
 
     auto segments_num = num_segments();
+    LOG(INFO) << fmt::format("add rowset to binlog. rowset_id={}, segments_num={}",
+                             rowset_id().to_string(), segments_num);
     for (int i = 0; i < segments_num; ++i) {
         auto seg_file = segment_file_path(i);
 

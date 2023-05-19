@@ -170,7 +170,7 @@ std::vector<std::string> RowsetMetaManager::get_binlog_filenames(OlapMeta* meta,
 
     std::vector<std::string> binlog_files;
     std::string rowset_id;
-    int64_t num_segments = 0;
+    int64_t num_segments = -1;
     auto traverse_func = [&rowset_id, &num_segments](const std::string& key,
                                                      const std::string& value) -> bool {
         LOG(INFO) << fmt::format("key:{}, value:{}", key, value);
@@ -200,7 +200,7 @@ std::vector<std::string> RowsetMetaManager::get_binlog_filenames(OlapMeta* meta,
 
     // get binlog meta by prefix
     Status status = meta->iterate(META_COLUMN_FAMILY_INDEX, prefix_key, traverse_func);
-    if (!status.ok() || rowset_id.empty() || num_segments == 0) {
+    if (!status.ok() || rowset_id.empty() || num_segments < 0) {
         LOG(WARNING) << fmt::format(
                 "fail to get binlog filename. tablet uid:{}, binlog version:{}, status:{}, "
                 "rowset_id:{}, num_segments:{}",
@@ -224,11 +224,13 @@ std::vector<std::string> RowsetMetaManager::get_binlog_filenames(OlapMeta* meta,
 
 std::pair<std::string, int64_t> RowsetMetaManager::get_binlog_info(
         OlapMeta* meta, TabletUid tablet_uid, std::string_view binlog_version) {
+    LOG(INFO) << fmt::format("tablet_uid:{}, binlog_version:{}", tablet_uid.to_string(),
+                             binlog_version);
     auto prefix_key = make_binlog_filename_key(tablet_uid, binlog_version);
     LOG(INFO) << fmt::format("prefix_key:{}", prefix_key);
 
     std::string rowset_id;
-    int64_t num_segments = 0;
+    int64_t num_segments = -1;
     auto traverse_func = [&rowset_id, &num_segments](const std::string& key,
                                                      const std::string& value) -> bool {
         LOG(INFO) << fmt::format("key:{}, value:{}", key, value);
@@ -250,7 +252,7 @@ std::pair<std::string, int64_t> RowsetMetaManager::get_binlog_info(
 
     // get binlog meta by prefix
     Status status = meta->iterate(META_COLUMN_FAMILY_INDEX, prefix_key, traverse_func);
-    if (!status.ok() || rowset_id.empty() || num_segments == 0) {
+    if (!status.ok() || rowset_id.empty() || num_segments < 0) {
         LOG(WARNING) << fmt::format(
                 "fail to get binlog filename. tablet uid:{}, binlog version:{}, status:{}, "
                 "rowset_id:{}, num_segments:{}",
