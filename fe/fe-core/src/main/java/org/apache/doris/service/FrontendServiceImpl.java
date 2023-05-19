@@ -1941,7 +1941,9 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         result.setStatus(status);
         try {
             TGetBinlogResult tmpRes = getBinlogImpl(request, clientAddr);
-            result.setBinlogs(tmpRes.getBinlogs());
+            if (tmpRes.isSetBinlogs()) {
+                result.setBinlogs(tmpRes.getBinlogs());
+            }
         } catch (UserException e) {
             LOG.warn("failed to get binlog: {}", e.getMessage());
             status.setStatusCode(TStatusCode.ANALYSIS_ERROR);
@@ -1952,6 +1954,8 @@ public class FrontendServiceImpl implements FrontendService.Iface {
             status.addToErrorMsgs(Strings.nullToEmpty(e.getMessage()));
             return result;
         }
+
+        LOG.info("get binlog success. request: {}, result: {}", request, result);
         return result;
     }
 
@@ -1996,9 +2000,12 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         TGetBinlogResult result = new TGetBinlogResult();
         long prevCommitSeq = request.getPrevCommitSeq();
         TBinlog binlog = env.getBinlogManager().getBinlog(dbId, tableId, prevCommitSeq);
-        List<TBinlog> binlogs = Lists.newArrayList();
-        binlogs.add(binlog);
-        result.setBinlogs(binlogs);
+        if (binlog != null) {
+            List<TBinlog> binlogs = Lists.newArrayList();
+            binlogs.add(binlog);
+            result.setBinlogs(binlogs);
+        }
+
         return result;
     }
 }
