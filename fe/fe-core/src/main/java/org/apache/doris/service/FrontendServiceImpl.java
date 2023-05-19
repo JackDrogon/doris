@@ -1934,7 +1934,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
 
     public TGetBinlogResult getBinlog(TGetBinlogRequest request) throws TException {
         String clientAddr = getClientAddrAsString();
-        LOG.debug("receive txn begin request: {}, backend: {}", request, clientAddr);
+        LOG.info("receive get binlog request: {}", request);
 
         TGetBinlogResult result = new TGetBinlogResult();
         TStatus status = new TStatus(TStatusCode.OK);
@@ -1943,7 +1943,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
             TGetBinlogResult tmpRes = getBinlogImpl(request, clientAddr);
             result.setBinlogs(tmpRes.getBinlogs());
         } catch (UserException e) {
-            LOG.warn("failed to begin: {}", e.getMessage());
+            LOG.warn("failed to get binlog: {}", e.getMessage());
             status.setStatusCode(TStatusCode.ANALYSIS_ERROR);
             status.addToErrorMsgs(e.getMessage());
         } catch (Throwable e) {
@@ -1985,10 +1985,9 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         long tableId = -1;
         String tableName = request.getTable();
         if (!Strings.isNullOrEmpty(tableName)) {
-            String fullTblName = ClusterNamespace.getFullName(cluster, tableName);
-            Table table = db.getTableOrMetaException(fullTblName, TableType.OLAP);
+            Table table = db.getTableOrMetaException(tableName, TableType.OLAP);
             if (table == null) {
-                throw new UserException("unknown table, table=" + fullTblName);
+                throw new UserException("unknown table, table=" + tableName);
             }
             tableId = table.getId();
         }

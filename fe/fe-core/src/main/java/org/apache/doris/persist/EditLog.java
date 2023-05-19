@@ -82,6 +82,7 @@ import org.apache.doris.resource.resourcegroup.ResourceGroup;
 import org.apache.doris.system.Backend;
 import org.apache.doris.system.Frontend;
 import org.apache.doris.transaction.TransactionState;
+import org.apache.doris.transaction.TransactionStatus;
 import org.apache.hadoop.hive.metastore.api.AddPartitionsResult;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -514,10 +515,13 @@ public class EditLog {
                     Env.getCurrentGlobalTransactionMgr().replayUpsertTransactionState(state);
                     LOG.info("logid: {}, opcode: {}, tid: {}, json: {}", logId, opCode, state.getTransactionId(),
                             state.toJson());
-                    UpsertRecord upsertRecord = new UpsertRecord(logId, state);
-                    LOG.info("logid: {}, upsert record: {}", logId, upsertRecord);
-                    LOG.debug("opcode: {}, tid: {}", opCode, state.getTransactionId());
-                    Env.getCurrentEnv().getBinlogManager().addUpsertRecord(upsertRecord);
+
+                    if (state.getTransactionStatus() == TransactionStatus.VISIBLE) {
+                        UpsertRecord upsertRecord = new UpsertRecord(logId, state);
+                        LOG.info("logid: {}, upsert record: {}", logId, upsertRecord);
+                        LOG.debug("opcode: {}, tid: {}", opCode, state.getTransactionId());
+                        Env.getCurrentEnv().getBinlogManager().addUpsertRecord(upsertRecord);
+                    }
                     break;
                 }
                 case OperationType.OP_DELETE_TRANSACTION_STATE: {
@@ -1383,9 +1387,11 @@ public class EditLog {
     // for TransactionState
     public void logInsertTransactionState(TransactionState transactionState) {
         long logId = logEdit(OperationType.OP_UPSERT_TRANSACTION_STATE, transactionState);
-        UpsertRecord record = new UpsertRecord(logId, transactionState);
-        Env.getCurrentEnv().getBinlogManager().addUpsertRecord(record);
-        LOG.info("EditLog upsert record: {}", record.toString());
+        if (transactionState.getTransactionStatus() == TransactionStatus.VISIBLE) {
+            UpsertRecord record = new UpsertRecord(logId, transactionState);
+            Env.getCurrentEnv().getBinlogManager().addUpsertRecord(record);
+            LOG.info("EditLog upsert record: {}", record.toString());
+        }
     }
 
     public void logBackupJob(BackupJob job) {
