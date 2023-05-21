@@ -967,6 +967,7 @@ struct TGetBinlogResult {
     2: optional i64 next_commit_seq
     3: optional list<TBinlog> binlogs
     4: optional string fe_version
+    5: optional i64 fe_meta_version
 }
 
 service FrontendService {
