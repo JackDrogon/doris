@@ -17,7 +17,10 @@
 
 package org.apache.doris.binlog;
 
+import org.apache.doris.common.Pair;
+
 import org.apache.doris.thrift.TBinlog;
+import org.apache.doris.thrift.TStatus;
 
 import java.util.TreeSet;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -55,13 +58,10 @@ public class TableBinlog {
         }
     }
 
-    public TBinlog getBinlog(long commitSeq) {
+    public Pair<TStatus, TBinlog> getBinlog(long commitSeq) {
         lock.readLock().lock();
         try {
-            // return first binlog whose commitSeq > commitSeq
-            TBinlog guard = new TBinlog();
-            guard.setCommitSeq(commitSeq);
-            return binlogs.higher(guard);
+            return BinlogUtils.getBinlog(binlogs, commitSeq);
         } finally {
             lock.readLock().unlock();
         }

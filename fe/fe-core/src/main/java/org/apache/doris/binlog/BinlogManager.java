@@ -20,6 +20,8 @@ package org.apache.doris.binlog;
 import org.apache.doris.common.Pair;
 import org.apache.doris.thrift.TBinlog;
 import org.apache.doris.thrift.TBinlogType;
+import org.apache.doris.thrift.TStatus;
+import org.apache.doris.thrift.TStatusCode;
 
 import com.google.common.collect.Maps;
 import org.apache.logging.log4j.LogManager;
@@ -115,14 +117,16 @@ public class BinlogManager {
     }
 
     // get binlog by dbId, return first binlog.version > version
-    public TBinlog getBinlog(long dbId, long tableId, long commitSeq) {
+    public Pair<TStatus, TBinlog> getBinlog(long dbId, long tableId, long commitSeq) {
         LOG.info("get binlog. dbId: {}, tableId: {}, commitSeq: {}", dbId, tableId, commitSeq);
+        TStatus status = new TStatus(TStatusCode.OK);
         lock.readLock().lock();
         try {
             DBBinlog dbBinlog = dbBinlogMap.get(dbId);
             if (dbBinlog == null) {
+                status.setStatusCode(TStatusCode.BINLOG_NOT_FOUND_DB);
                 LOG.warn("dbBinlog not found. dbId: {}", dbId);
-                return null;
+                return Pair.of(status, null);
             }
 
             return dbBinlog.getBinlog(tableId, commitSeq);

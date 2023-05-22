@@ -17,7 +17,11 @@
 
 package org.apache.doris.binlog;
 
+import org.apache.doris.common.Pair;
+
 import org.apache.doris.thrift.TBinlog;
+import org.apache.doris.thrift.TStatus;
+import org.apache.doris.thrift.TStatusCode;
 
 import java.util.HashMap;
 import java.util.List;
@@ -76,22 +80,20 @@ public class DBBinlog {
         return dbId;
     }
 
-    public TBinlog getBinlog(long tableId, long commitSeq) {
+    public Pair<TStatus, TBinlog> getBinlog(long tableId, long commitSeq) {
+        TStatus status = new TStatus(TStatusCode.OK);
         lock.readLock().lock();
         try {
             if (tableId >= 0) {
                 TableBinlog tableBinlog = tableBinlogMap.get(tableId);
                 if (tableBinlog == null) {
-                    return null;
+                    status.setStatusCode(TStatusCode.BINLOG_NOT_FOUND_TABLE);
+                    return Pair.of(status, null);
                 }
                 return tableBinlog.getBinlog(commitSeq);
             }
 
-            // get first binlog from internal allBinlogs whose commitSeq  > commitSeq
-            TBinlog guard = new TBinlog();
-            guard.setCommitSeq(commitSeq);
-            TBinlog binlog = allBinlogs.higher(guard);
-            return binlog;
+            return BinlogUtils.getBinlog(allBinlogs, commitSeq);
         } finally {
             lock.readLock().unlock();
         }
