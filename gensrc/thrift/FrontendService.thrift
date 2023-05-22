@@ -666,16 +666,14 @@ struct TCommitTxnRequest {
     2: required string user
     3: required string passwd
     4: required string db
-    5: required list<string> tables
-    6: optional string user_ip
-    7: required i64 txnId
-    8: required bool sync
-    9: optional list<Types.TTabletCommitInfo> commitInfos
-    10: optional i64 auth_code
-    11: optional TTxnCommitAttachment txnCommitAttachment
-    12: optional i64 thrift_rpc_timeout_ms
-    13: optional string token
-    14: optional i64 db_id
+    5: optional string user_ip
+    6: required i64 txnId
+    7: required list<Types.TTabletCommitInfo> commitInfos
+    8: optional i64 auth_code
+    9: optional TTxnCommitAttachment txnCommitAttachment
+    10: optional i64 thrift_rpc_timeout_ms
+    11: optional string token
+    12: optional i64 db_id
 }
 
 struct TCommitTxnResult {
@@ -704,13 +702,13 @@ struct TRollbackTxnRequest {
     2: required string user
     3: required string passwd
     4: required string db
-    5: required list<string> tables
-    6: optional string user_ip
-    7: required i64 txnId
-    8: optional string reason
+    5: optional string user_ip
+    6: required i64 txnId
+    7: optional string reason
     9: optional i64 auth_code
     10: optional TTxnCommitAttachment txnCommitAttachment
     11: optional string token
+    12: optional i64 db_id
 }
 
 struct TRollbackTxnResult {

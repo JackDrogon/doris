@@ -991,7 +991,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
     @Override
     public TBeginTxnResult beginTxn(TBeginTxnRequest request) throws TException {
         String clientAddr = getClientAddrAsString();
-        LOG.debug("receive txn begin request: {}, backend: {}", request, clientAddr);
+        LOG.info("receive txn begin request: {}, client: {}", request, clientAddr);
 
         TBeginTxnResult result = new TBeginTxnResult();
         TStatus status = new TStatus(TStatusCode.OK);
@@ -1018,6 +1018,8 @@ public class FrontendServiceImpl implements FrontendService.Iface {
             status.addToErrorMsgs(Strings.nullToEmpty(e.getMessage()));
             return result;
         }
+
+        LOG.info("BeginTxn result is {}", result);
         return result;
     }
 
@@ -1073,6 +1075,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         // step 7: return result
         TBeginTxnResult result = new TBeginTxnResult();
         result.setTxnId(txnId).setDbId(db.getId());
+        LOG.info("BeginTxnImpl result is {}", result);
         return result;
     }
 
@@ -1284,7 +1287,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
     @Override
     public TCommitTxnResult commitTxn(TCommitTxnRequest request) throws TException {
         String clientAddr = getClientAddrAsString();
-        LOG.debug("receive txn commit request: {}, client: {}", request, clientAddr);
+        LOG.info("receive txn commit request: {}, client: {}", request, clientAddr);
 
         TCommitTxnResult result = new TCommitTxnResult();
         TStatus status = new TStatus(TStatusCode.OK);
@@ -1315,17 +1318,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
             cluster = SystemInfoService.DEFAULT_CLUSTER;
         }
 
-        // step 1: check auth
-        if (request.isSetAuthCode()) {
-            // TODO(cmy): find a way to check
-        } else if (request.isSetToken()) {
-            checkToken(request.getToken());
-        } else {
-            checkPasswordAndPrivs(cluster, request.getUser(), request.getPasswd(), request.getDb(), request.getTables(),
-                    request.getUserIp(), PrivPredicate.LOAD);
-        }
-
-        // step 2: get && check database
+        // Step 1: get && check database
         Env env = Env.getCurrentEnv();
         String fullDbName = ClusterNamespace.getFullName(cluster, request.getDb());
         Database db;
@@ -1342,20 +1335,37 @@ public class FrontendServiceImpl implements FrontendService.Iface {
             throw new UserException("unknown database, database=" + dbName);
         }
 
-        // step 3: get timeout
-        long timeoutMs = request.isSetThriftRpcTimeoutMs() ? request.getThriftRpcTimeoutMs() / 2 : 5000;
-
-        // step 4: get tables
-        List<Table> tableList = Lists.newArrayList();
-        for (String tblName : request.getTables()) {
-            Table table = db.getTableOrMetaException(tblName, TableType.OLAP);
-            if (table == null) {
-                throw new UserException("unknown table, table=" + tblName);
-            }
-            tableList.add(table);
+        // Step 2: get tables
+        DatabaseTransactionMgr dbTransactionMgr = Env.getCurrentGlobalTransactionMgr()
+                .getDatabaseTransactionMgr(db.getId());
+        TransactionState transactionState = dbTransactionMgr.getTransactionState(request.getTxnId());
+        if (transactionState == null) {
+            throw new UserException("transaction [" + request.getTxnId() + "] not found");
+        }
+        List<Long> tableIdList = transactionState.getTableIdList();
+        List<Table> tableList = new ArrayList<>();
+        List<String> tables = new ArrayList<>();
+        // if table was dropped, transaction must be aborted
+        tableList = db.getTablesOnIdOrderOrThrowException(tableIdList);
+        for (Table table : tableList) {
+            tables.add(table.getName());
         }
 
-        // step 5: commit and publish
+        // Step 3: check auth
+        if (request.isSetAuthCode()) {
+            // TODO(cmy): find a way to check
+        } else if (request.isSetToken()) {
+            checkToken(request.getToken());
+        } else {
+            checkPasswordAndPrivs(cluster, request.getUser(), request.getPasswd(), request.getDb(), tables,
+                    request.getUserIp(), PrivPredicate.LOAD);
+        }
+
+        // Step 4: get timeout
+        long timeoutMs = request.isSetThriftRpcTimeoutMs() ? request.getThriftRpcTimeoutMs() / 2 : 5000;
+
+
+        // Step 5: commit and publish
         return Env.getCurrentGlobalTransactionMgr()
                 .commitAndPublishTransaction(db, tableList,
                         request.getTxnId(),
@@ -1425,7 +1435,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
     @Override
     public TRollbackTxnResult rollbackTxn(TRollbackTxnRequest request) throws TException {
         String clientAddr = getClientAddrAsString();
-        LOG.debug("receive txn rollback request: {}, backend: {}", request, clientAddr);
+        LOG.debug("receive txn rollback request: {}, client: {}", request, clientAddr);
         TRollbackTxnResult result = new TRollbackTxnResult();
         TStatus status = new TStatus(TStatusCode.OK);
         result.setStatus(status);
@@ -1451,32 +1461,50 @@ public class FrontendServiceImpl implements FrontendService.Iface {
             cluster = SystemInfoService.DEFAULT_CLUSTER;
         }
 
-        // step 1: check auth
+        // Step 1: get && check database
+        Env env = Env.getCurrentEnv();
+        String fullDbName = ClusterNamespace.getFullName(cluster, request.getDb());
+        Database db;
+        if (request.isSetDbId() && request.getDbId() > 0) {
+            db = env.getInternalCatalog().getDbNullable(request.getDbId());
+        } else {
+            db = env.getInternalCatalog().getDbNullable(fullDbName);
+        }
+        if (db == null) {
+            String dbName = fullDbName;
+            if (Strings.isNullOrEmpty(request.getCluster())) {
+                dbName = request.getDb();
+            }
+            throw new UserException("unknown database, database=" + dbName);
+        }
+
+        // Step 2: get tables
+        DatabaseTransactionMgr dbTransactionMgr = Env.getCurrentGlobalTransactionMgr()
+                .getDatabaseTransactionMgr(db.getId());
+        TransactionState transactionState = dbTransactionMgr.getTransactionState(request.getTxnId());
+        if (transactionState == null) {
+            throw new UserException("transaction [" + request.getTxnId() + "] not found");
+        }
+        List<Long> tableIdList = transactionState.getTableIdList();
+        List<Table> tableList = new ArrayList<>();
+        List<String> tables = new ArrayList<>();
+        tableList = db.getTablesOnIdOrderOrThrowException(tableIdList);
+        for (Table table : tableList) {
+            tables.add(table.getName());
+        }
+
+        // Step 3: check auth
         if (request.isSetAuthCode()) {
             // TODO(cmy): find a way to check
         } else if (request.isSetToken()) {
             checkToken(request.getToken());
         } else {
-            checkPasswordAndPrivs(cluster, request.getUser(), request.getPasswd(), request.getDb(), request.getTables(),
+            checkPasswordAndPrivs(cluster, request.getUser(), request.getPasswd(), request.getDb(), tables,
                     request.getUserIp(), PrivPredicate.LOAD);
         }
 
-        // step 2 : get db
-        String dbName = ClusterNamespace.getFullName(cluster, request.getDb());
-        Database db = Env.getCurrentInternalCatalog().getDbNullable(dbName);
-        if (db == null) {
-            throw new MetaNotFoundException("db " + request.getDb() + " does not exist");
-        }
-
-        // step 3: abort txn
-        long dbId = db.getId();
-        DatabaseTransactionMgr dbTransactionMgr = Env.getCurrentGlobalTransactionMgr().getDatabaseTransactionMgr(dbId);
-        TransactionState transactionState = dbTransactionMgr.getTransactionState(request.getTxnId());
-        if (transactionState == null) {
-            throw new UserException("transaction [" + request.getTxnId() + "] not found");
-        }
-        List<Table> tableList = db.getTablesOnIdOrderIfExist(transactionState.getTableIdList());
-        Env.getCurrentGlobalTransactionMgr().abortTransaction(dbId, request.getTxnId(),
+        // Step 4: abort txn
+        Env.getCurrentGlobalTransactionMgr().abortTransaction(db.getId(), request.getTxnId(),
                 request.isSetReason() ? request.getReason() : "system cancel",
                 TxnCommitAttachment.fromThrift(request.getTxnCommitAttachment()), tableList);
     }
