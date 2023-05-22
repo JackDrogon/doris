@@ -33,7 +33,7 @@ public class BinlogUtils {
         // all commitSeq > commitSeq
         if (firstBinlog.getCommitSeq() > commitSeq) {
             status.setStatusCode(TStatusCode.BINLOG_TOO_OLD_COMMIT_SEQ);
-            return Pair.of(status, null);
+            return Pair.of(status, firstBinlog);
         }
 
         // find first binlog whose commitSeq > commitSeq

@@ -1348,10 +1348,9 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         // step 4: get tables
         List<Table> tableList = Lists.newArrayList();
         for (String tblName : request.getTables()) {
-            String fullTblName = ClusterNamespace.getFullName(cluster, tblName);
-            Table table = db.getTableOrMetaException(fullTblName, TableType.OLAP);
+            Table table = db.getTableOrMetaException(tblName, TableType.OLAP);
             if (table == null) {
-                throw new UserException("unknown table, table=" + fullTblName);
+                throw new UserException("unknown table, table=" + tblName);
             }
             tableList.add(table);
         }
@@ -1939,12 +1938,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         TStatus status = new TStatus(TStatusCode.OK);
         result.setStatus(status);
         try {
-            TGetBinlogResult tmpRes = getBinlogImpl(request, clientAddr);
-            if (tmpRes.status.getStatusCode() != TStatusCode.OK) {
-                result.setStatus(tmpRes.status);
-            } else if (tmpRes.isSetBinlogs()) {
-                result.setBinlogs(tmpRes.getBinlogs());
-            }
+            result = getBinlogImpl(request, clientAddr);
         } catch (UserException e) {
             LOG.warn("failed to get binlog: {}", e.getMessage());
             status.setStatusCode(TStatusCode.ANALYSIS_ERROR);
@@ -1999,12 +1993,16 @@ public class FrontendServiceImpl implements FrontendService.Iface {
 
         // step 6: get binlog
         TGetBinlogResult result = new TGetBinlogResult();
+        result.setStatus(new TStatus(TStatusCode.OK));
         long prevCommitSeq = request.getPrevCommitSeq();
         Pair<TStatus, TBinlog> status_binlog_pair = env.getBinlogManager().getBinlog(dbId, tableId, prevCommitSeq);
         TStatus status = status_binlog_pair.first;
         if (status != null && status.getStatusCode() != TStatusCode.OK) {
             result.setStatus(status);
-            return result;
+            // TOO_OLD return first exist binlog
+            if (status.getStatusCode() != TStatusCode.BINLOG_TOO_OLD_COMMIT_SEQ) {
+                return result;
+            }
         }
         TBinlog binlog = status_binlog_pair.second;
         if (binlog != null) {
