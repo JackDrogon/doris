@@ -92,11 +92,18 @@ Status TxnManager::prepare_txn(TPartitionId partition_id, const TabletSharedPtr&
     const auto& schema_hash = tablet->schema_hash();
     const auto& tablet_uid = tablet->tablet_uid();
 
+    return prepare_txn(partition_id, transaction_id, tablet_id, schema_hash, tablet_uid, load_id);
+}
+
+// most used for ut
+Status TxnManager::prepare_txn(TPartitionId partition_id, TTransactionId transaction_id,
+                               TTabletId tablet_id, SchemaHash schema_hash, TabletUid tablet_uid,
+                               const PUniqueId& load_id) {
     TxnKey key(partition_id, transaction_id);
     TabletInfo tablet_info(tablet_id, schema_hash, tablet_uid);
     std::lock_guard<std::shared_mutex> txn_wrlock(_get_txn_map_lock(transaction_id));
     txn_tablet_map_t& txn_tablet_map = _get_txn_tablet_map(transaction_id);
-    
+
     /// Step 1: check if the transaction is already exist
     do {
         auto iter = txn_tablet_map.find(key);
