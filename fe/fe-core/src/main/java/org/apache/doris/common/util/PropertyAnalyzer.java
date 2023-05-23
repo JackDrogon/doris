@@ -694,6 +694,56 @@ public class PropertyAnalyzer {
         return tagMap;
     }
 
+    public static Map<String, String> analyzeBinlogConfig(Map<String, String> properties) throws AnalysisException {
+        if (properties == null || properties.isEmpty()) {
+            return null;
+        }
+
+        Map<String, String> binlogConfigMap = Maps.newHashMap();
+        // check PROPERTIES_BINLOG_ENABLE = "binlog.enable";
+        if (properties.containsKey(PROPERTIES_BINLOG_ENABLE)) {
+            String enable = properties.get(PROPERTIES_BINLOG_ENABLE);
+            try {
+                binlogConfigMap.put(PROPERTIES_BINLOG_ENABLE, String.valueOf(Boolean.parseBoolean(enable)));
+                properties.remove(PROPERTIES_BINLOG_ENABLE);
+            } catch (Exception e) {
+                throw new AnalysisException("Invalid binlog enable value: " + enable);
+            }
+        }
+        // check PROPERTIES_BINLOG_TTL_SECONDS = "binlog.ttl_seconds";
+        if (properties.containsKey(PROPERTIES_BINLOG_TTL_SECONDS)) {
+            String ttlSeconds = properties.get(PROPERTIES_BINLOG_TTL_SECONDS);
+            try {
+                binlogConfigMap.put(PROPERTIES_BINLOG_TTL_SECONDS, String.valueOf(Long.parseLong(ttlSeconds)));
+                properties.remove(PROPERTIES_BINLOG_TTL_SECONDS);
+            } catch (Exception e) {
+                throw new AnalysisException("Invalid binlog ttl_seconds value: " + ttlSeconds);
+            }
+        }
+        // check PROPERTIES_BINLOG_MAX_BYTES = "binlog.max_bytes";
+        if (properties.containsKey(PROPERTIES_BINLOG_MAX_BYTES)) {
+            String maxBytes = properties.get(PROPERTIES_BINLOG_MAX_BYTES);
+            try {
+                binlogConfigMap.put(PROPERTIES_BINLOG_MAX_BYTES, String.valueOf(Long.parseLong(maxBytes)));
+                properties.remove(PROPERTIES_BINLOG_MAX_BYTES);
+            } catch (Exception e) {
+                throw new AnalysisException("Invalid binlog max_bytes value: " + maxBytes);
+            }
+        }
+        // check PROPERTIES_BINLOG_MAX_HISTORY_NUMS = "binlog.max_history_nums";
+        if (properties.containsKey(PROPERTIES_BINLOG_MAX_HISTORY_NUMS)) {
+            String maxHistoryNums = properties.get(PROPERTIES_BINLOG_MAX_HISTORY_NUMS);
+            try {
+                binlogConfigMap.put(PROPERTIES_BINLOG_MAX_HISTORY_NUMS, String.valueOf(Long.parseLong(maxHistoryNums)));
+                properties.remove(PROPERTIES_BINLOG_MAX_HISTORY_NUMS);
+            } catch (Exception e) {
+                throw new AnalysisException("Invalid binlog max_history_nums value: " + maxHistoryNums);
+            }
+        }
+
+        return binlogConfigMap;
+    }
+
     // There are 2 kinds of replication property:
     // 1. "replication_num" = "3"
     // 2. "replication_allocation" = "tag.location.zone1: 2, tag.location.zone2: 1"
