@@ -83,10 +83,68 @@ TxnManager::TxnManager(int32_t txn_map_shard_size, int32_t txn_shard_size)
     _txn_tablet_delta_writer_map_locks = new std::shared_mutex[_txn_map_shard_size];
 }
 
+// prepare txn should always be allowed because ingest task will be retried
+// could not distinguish rollup, schema change or base table, prepare txn successfully will allow
+// ingest retried
 Status TxnManager::prepare_txn(TPartitionId partition_id, const TabletSharedPtr& tablet,
                                TTransactionId transaction_id, const PUniqueId& load_id) {
-    return prepare_txn(partition_id, transaction_id, tablet->tablet_id(), tablet->schema_hash(),
-                       tablet->tablet_uid(), load_id);
+    const auto& tablet_id = tablet->tablet_id();
+    const auto& schema_hash = tablet->schema_hash();
+    const auto& tablet_uid = tablet->tablet_uid();
+
+    TxnKey key(partition_id, transaction_id);
+    TabletInfo tablet_info(tablet_id, schema_hash, tablet_uid);
+    std::lock_guard<std::shared_mutex> txn_wrlock(_get_txn_map_lock(transaction_id));
+    txn_tablet_map_t& txn_tablet_map = _get_txn_tablet_map(transaction_id);
+    
+    /// Step 1: check if the transaction is already exist
+    do {
+        auto iter = txn_tablet_map.find(key);
+        if (iter == txn_tablet_map.end()) {
+            break;
+        }
+
+        // exist TxnKey
+        auto& txn_tablet_info_map = iter->second;
+        auto load_itr = txn_tablet_info_map.find(tablet_info);
+        if (load_itr == txn_tablet_info_map.end()) {
+            break;
+        }
+
+        // found load for txn,tablet
+        TabletTxnInfo& load_info = load_itr->second;
+        // case 1: user commit rowset, then the load id must be equal
+        // check if load id is equal
+        if (load_info.load_id.hi() == load_id.hi() && load_info.load_id.lo() == load_id.lo() &&
+            load_info.rowset != nullptr) {
+            LOG(WARNING) << "find transaction exists when add to engine."
+                         << "partition_id: " << key.first << ", transaction_id: " << key.second
+                         << ", tablet: " << tablet_info.to_string();
+            return Status::OK();
+        }
+    } while (false);
+
+    /// Step 2: check if there are too many transactions on running.
+    // check if there are too many transactions on running.
+    // if yes, reject the request.
+    txn_partition_map_t& txn_partition_map = _get_txn_partition_map(transaction_id);
+    if (txn_partition_map.size() > config::max_runnings_transactions_per_txn_map) {
+        LOG(WARNING) << "too many transactions: " << txn_tablet_map.size()
+                     << ", limit: " << config::max_runnings_transactions_per_txn_map;
+        return Status::Error<TOO_MANY_TRANSACTIONS>();
+    }
+
+    /// Step 3: Add transaction to engine
+    // not found load id
+    // case 1: user start a new txn, rowset = null
+    // case 2: loading txn from meta env
+    TabletTxnInfo load_info(load_id, nullptr);
+    txn_tablet_map[key][tablet_info] = load_info;
+    _insert_txn_partition_map_unlocked(transaction_id, partition_id);
+    VLOG_NOTICE << "add transaction to engine successfully."
+                << "partition_id: " << key.first << ", transaction_id: " << key.second
+                << ", tablet: " << tablet_info.to_string();
+    return Status::OK();
 }
 
 Status TxnManager::commit_txn(TPartitionId partition_id, const TabletSharedPtr& tablet,
@@ -114,56 +172,6 @@ Status TxnManager::delete_txn(TPartitionId partition_id, const TabletSharedPtr& 
                               TTransactionId transaction_id) {
     return delete_txn(tablet->data_dir()->get_meta(), partition_id, transaction_id,
                       tablet->tablet_id(), tablet->schema_hash(), tablet->tablet_uid());
-}
-
-// prepare txn should always be allowed because ingest task will be retried
-// could not distinguish rollup, schema change or base table, prepare txn successfully will allow
-// ingest retried
-Status TxnManager::prepare_txn(TPartitionId partition_id, TTransactionId transaction_id,
-                               TTabletId tablet_id, SchemaHash schema_hash, TabletUid tablet_uid,
-                               const PUniqueId& load_id) {
-    TxnKey key(partition_id, transaction_id);
-    TabletInfo tablet_info(tablet_id, schema_hash, tablet_uid);
-    std::lock_guard<std::shared_mutex> txn_wrlock(_get_txn_map_lock(transaction_id));
-    txn_tablet_map_t& txn_tablet_map = _get_txn_tablet_map(transaction_id);
-    auto it = txn_tablet_map.find(key);
-    if (it != txn_tablet_map.end()) {
-        auto load_itr = it->second.find(tablet_info);
-        if (load_itr != it->second.end()) {
-            // found load for txn,tablet
-            // case 1: user commit rowset, then the load id must be equal
-            TabletTxnInfo& load_info = load_itr->second;
-            // check if load id is equal
-            if (load_info.load_id.hi() == load_id.hi() && load_info.load_id.lo() == load_id.lo() &&
-                load_info.rowset != nullptr) {
-                LOG(WARNING) << "find transaction exists when add to engine."
-                             << "partition_id: " << key.first << ", transaction_id: " << key.second
-                             << ", tablet: " << tablet_info.to_string();
-                return Status::OK();
-            }
-        }
-    }
-
-    // check if there are too many transactions on running.
-    // if yes, reject the request.
-    txn_partition_map_t& txn_partition_map = _get_txn_partition_map(transaction_id);
-    if (txn_partition_map.size() > config::max_runnings_transactions_per_txn_map) {
-        LOG(WARNING) << "too many transactions: " << txn_tablet_map.size()
-                     << ", limit: " << config::max_runnings_transactions_per_txn_map;
-        return Status::Error<TOO_MANY_TRANSACTIONS>();
-    }
-
-    // not found load id
-    // case 1: user start a new txn, rowset = null
-    // case 2: loading txn from meta env
-    TabletTxnInfo load_info(load_id, nullptr);
-    txn_tablet_map[key][tablet_info] = load_info;
-    _insert_txn_partition_map_unlocked(transaction_id, partition_id);
-
-    VLOG_NOTICE << "add transaction to engine successfully."
-                << "partition_id: " << key.first << ", transaction_id: " << key.second
-                << ", tablet: " << tablet_info.to_string();
-    return Status::OK();
 }
 
 void TxnManager::set_txn_related_delete_bitmap(TPartitionId partition_id,

@@ -90,6 +90,8 @@ public:
         delete[] _txn_tablet_delta_writer_map_locks;
     }
 
+    // add a txn to manager
+    // partition id is useful in publish version stage because version is associated with partition
     Status prepare_txn(TPartitionId partition_id, const TabletSharedPtr& tablet,
                        TTransactionId transaction_id, const PUniqueId& load_id);
 
@@ -106,12 +108,6 @@ public:
 
     Status delete_txn(TPartitionId partition_id, const TabletSharedPtr& tablet,
                       TTransactionId transaction_id);
-
-    // add a txn to manager
-    // partition id is useful in publish version stage because version is associated with partition
-    Status prepare_txn(TPartitionId partition_id, TTransactionId transaction_id,
-                       TTabletId tablet_id, SchemaHash schema_hash, TabletUid tablet_uid,
-                       const PUniqueId& load_id);
 
     Status commit_txn(OlapMeta* meta, TPartitionId partition_id, TTransactionId transaction_id,
                       TTabletId tablet_id, SchemaHash schema_hash, TabletUid tablet_uid,
