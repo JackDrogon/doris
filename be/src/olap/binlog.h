@@ -50,6 +50,11 @@ inline auto make_binlog_data_key(std::string_view tablet, int64_t version,
     return fmt::format("{}data_{}_{:020d}_{}", kBinlogPrefix, tablet, version, rowset);
 }
 
+inline auto make_binlog_data_key(std::string_view tablet, std::string_view version,
+                                 std::string_view rowset) {
+    return fmt::format("{}data_{}_{:0>20}_{}", kBinlogPrefix, tablet, version, rowset);
+}
+
 inline auto make_binlog_data_key(const TabletUid& tablet_uid, int64_t version,
                                  const RowsetId& rowset_id) {
     return make_binlog_data_key(tablet_uid.to_string(), version, rowset_id.to_string());

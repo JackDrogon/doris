@@ -266,11 +266,11 @@ std::pair<std::string, int64_t> RowsetMetaManager::get_binlog_info(
 std::string RowsetMetaManager::get_binlog_rowset_meta(OlapMeta* meta, TabletUid tablet_uid,
                                                       std::string_view binlog_version,
                                                       std::string_view rowset_id) {
-    auto binlog_meta_key = make_binlog_meta_key(tablet_uid.to_string(), binlog_version, rowset_id);
-    LOG(INFO) << fmt::format("get binlog_meta_key:{}", binlog_meta_key);
+    auto binlog_data_key = make_binlog_data_key(tablet_uid.to_string(), binlog_version, rowset_id);
+    LOG(INFO) << fmt::format("get binlog_meta_key:{}", binlog_data_key);
 
     std::string binlog_meta_value;
-    Status status = meta->get(META_COLUMN_FAMILY_INDEX, binlog_meta_key, &binlog_meta_value);
+    Status status = meta->get(META_COLUMN_FAMILY_INDEX, binlog_data_key, &binlog_meta_value);
     if (!status.ok()) {
         LOG(WARNING) << fmt::format(
                 "fail to get binlog meta. tablet uid:{}, binlog version:{}, "

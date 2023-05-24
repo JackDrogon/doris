@@ -87,18 +87,20 @@ TxnManager::TxnManager(int32_t txn_map_shard_size, int32_t txn_shard_size)
 // could not distinguish rollup, schema change or base table, prepare txn successfully will allow
 // ingest retried
 Status TxnManager::prepare_txn(TPartitionId partition_id, const TabletSharedPtr& tablet,
-                               TTransactionId transaction_id, const PUniqueId& load_id) {
+                               TTransactionId transaction_id, const PUniqueId& load_id,
+                               bool ingest) {
     const auto& tablet_id = tablet->tablet_id();
     const auto& schema_hash = tablet->schema_hash();
     const auto& tablet_uid = tablet->tablet_uid();
 
-    return prepare_txn(partition_id, transaction_id, tablet_id, schema_hash, tablet_uid, load_id);
+    return prepare_txn(partition_id, transaction_id, tablet_id, schema_hash, tablet_uid, load_id,
+                       ingest);
 }
 
 // most used for ut
 Status TxnManager::prepare_txn(TPartitionId partition_id, TTransactionId transaction_id,
                                TTabletId tablet_id, SchemaHash schema_hash, TabletUid tablet_uid,
-                               const PUniqueId& load_id) {
+                               const PUniqueId& load_id, bool ingest) {
     TxnKey key(partition_id, transaction_id);
     TabletInfo tablet_info(tablet_id, schema_hash, tablet_uid);
     std::lock_guard<std::shared_mutex> txn_wrlock(_get_txn_map_lock(transaction_id));
@@ -145,7 +147,7 @@ Status TxnManager::prepare_txn(TPartitionId partition_id, TTransactionId transac
     // not found load id
     // case 1: user start a new txn, rowset = null
     // case 2: loading txn from meta env
-    TabletTxnInfo load_info(load_id, nullptr);
+    TabletTxnInfo load_info(load_id, nullptr, ingest);
     txn_tablet_map[key][tablet_info] = load_info;
     _insert_txn_partition_map_unlocked(transaction_id, partition_id);
     VLOG_NOTICE << "add transaction to engine successfully."
@@ -393,6 +395,7 @@ Status TxnManager::publish_txn(OlapMeta* meta, TPartitionId partition_id,
     /// Step 4: save meta
     auto status = RowsetMetaManager::save(meta, tablet_uid, rowset->rowset_id(),
                                           rowset->rowset_meta()->get_rowset_pb(), enable_binlog);
+    LOG(INFO) << "rowset meta pb: " << rowset->rowset_meta()->get_rowset_pb().DebugString();
     if (!status.ok()) {
         LOG(WARNING) << "save committed rowset failed. when publish txn rowset_id:"
                      << rowset->rowset_id() << ", tablet id: " << tablet_id

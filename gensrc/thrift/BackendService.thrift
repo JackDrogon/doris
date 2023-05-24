@@ -127,7 +127,9 @@ struct TIngestBinlogRequest {
     3: required i64 binlog_version;
     4: required string remote_host;
     5: required string remote_port;
-    6: required i64 local_tablet_id;
+    6: required i64 partition_id;
+    7: required i64 local_tablet_id;
+    8: required Types.TUniqueId load_id;
 }
 
 struct TIngestBinlogResult {

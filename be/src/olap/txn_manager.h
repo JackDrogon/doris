@@ -57,16 +57,13 @@ struct TabletTxnInfo {
     // records rowsets calc in commit txn
     RowsetIdUnorderedSet rowset_ids;
     int64_t creation_time;
-    bool is_ingrest {false};
+    bool ingest {false};
 
     TabletTxnInfo(PUniqueId load_id, RowsetSharedPtr rowset)
             : load_id(load_id), rowset(rowset), creation_time(UnixSeconds()) {}
 
-    TabletTxnInfo(PUniqueId load_id, RowsetSharedPtr rowset, bool is_ingrest_arg)
-            : load_id(load_id),
-              rowset(rowset),
-              creation_time(UnixSeconds()),
-              is_ingrest(is_ingrest_arg) {}
+    TabletTxnInfo(PUniqueId load_id, RowsetSharedPtr rowset, bool ingest_arg)
+            : load_id(load_id), rowset(rowset), creation_time(UnixSeconds()), ingest(ingest_arg) {}
 
     TabletTxnInfo(PUniqueId load_id, RowsetSharedPtr rowset, bool merge_on_write,
                   DeleteBitmapPtr delete_bitmap, const RowsetIdUnorderedSet& ids)
@@ -97,11 +94,12 @@ public:
     // add a txn to manager
     // partition id is useful in publish version stage because version is associated with partition
     Status prepare_txn(TPartitionId partition_id, const TabletSharedPtr& tablet,
-                       TTransactionId transaction_id, const PUniqueId& load_id);
+                       TTransactionId transaction_id, const PUniqueId& load_id,
+                       bool is_ingest = false);
     // most used for ut
     Status prepare_txn(TPartitionId partition_id, TTransactionId transaction_id,
                        TTabletId tablet_id, SchemaHash schema_hash, TabletUid tablet_uid,
-                       const PUniqueId& load_id);
+                       const PUniqueId& load_id, bool is_ingest = false);
 
     Status commit_txn(TPartitionId partition_id, const TabletSharedPtr& tablet,
                       TTransactionId transaction_id, const PUniqueId& load_id,

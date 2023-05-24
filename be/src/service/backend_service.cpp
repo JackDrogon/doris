@@ -383,7 +383,7 @@ void BackendService::check_storage_format(TCheckStorageFormatResult& result) {
 
 void BackendService::ingest_binlog(TIngestBinlogResult& result,
                                    const TIngestBinlogRequest& request) {
-    int64_t txn_id = request.txn_id;
+    auto txn_id = request.txn_id;
     // Step 1: get local tablet
     auto const& local_tablet_id = request.local_tablet_id;
     auto local_tablet = StorageEngine::instance()->tablet_manager()->get_tablet(local_tablet_id);
@@ -394,7 +394,23 @@ void BackendService::ingest_binlog(TIngestBinlogResult& result,
         return;
     }
 
-    // Step 2: get binlog info
+    // Step 2: check txn, create txn, prepare_txn will check it
+    auto partition_id = request.partition_id;
+    auto& load_id = request.load_id;
+    auto is_ingrest = true;
+    PUniqueId p_load_id;
+    p_load_id.set_hi(load_id.hi);
+    p_load_id.set_lo(load_id.lo);
+    auto status = StorageEngine::instance()->txn_manager()->prepare_txn(
+            partition_id, local_tablet, txn_id, p_load_id, is_ingrest);
+    if (!status.ok()) {
+        LOG(WARNING) << "prepare txn failed. txn_id=" << txn_id
+                     << ", status=" << status.to_string();
+        status.to_thrift(&result.status);
+        return;
+    }
+
+    // Step 3: get binlog info
     auto binlog_api_url = fmt::format("http://{}:{}/api/_binlog/_download", request.remote_host,
                                       request.remote_port);
     constexpr int max_retry = 3;
@@ -408,7 +424,7 @@ void BackendService::ingest_binlog(TIngestBinlogResult& result,
         client->set_timeout_ms(10); // 10ms
         return client->execute(&binlog_info);
     };
-    auto status = HttpClient::execute_with_retry(max_retry, 1, get_binlog_info_cb);
+    status = HttpClient::execute_with_retry(max_retry, 1, get_binlog_info_cb);
     if (!status.ok()) {
         LOG(WARNING) << "failed to get binlog info from " << get_binlog_info_url
                      << ", status=" << status.to_string();
@@ -419,13 +435,13 @@ void BackendService::ingest_binlog(TIngestBinlogResult& result,
     std::vector<std::string> binlog_info_parts = strings::Split(binlog_info, ":");
     // TODO(Drogon): check binlog info content is right
     DCHECK(binlog_info_parts.size() == 2);
-    const std::string& rowset_id = binlog_info_parts[0];
+    const std::string& remote_rowset_id = binlog_info_parts[0];
     int64_t num_segments = std::stoll(binlog_info_parts[1]);
 
-    // Step 3: get rowset meta
+    // Step 4: get rowset meta
     auto get_rowset_meta_url = fmt::format(
             "{}?method={}&tablet_id={}&rowset_id={}&binlog_version={}", binlog_api_url,
-            "get_rowset_meta", request.remote_tablet_id, rowset_id, request.binlog_version);
+            "get_rowset_meta", request.remote_tablet_id, remote_rowset_id, request.binlog_version);
     std::string rowset_meta_str;
     auto get_rowset_meta_cb = [&get_rowset_meta_url, &rowset_meta_str](HttpClient* client) {
         RETURN_IF_ERROR(client->init(get_rowset_meta_url));
@@ -446,12 +462,14 @@ void BackendService::ingest_binlog(TIngestBinlogResult& result,
         status.to_thrift(&result.status);
         return;
     }
+    LOG(INFO) << "remote rowset meta pb: " << rowset_meta_pb.ShortDebugString();
     // rewrite rowset meta
     rowset_meta_pb.set_tablet_id(local_tablet_id);
     rowset_meta_pb.set_partition_id(local_tablet->tablet_meta()->partition_id());
     rowset_meta_pb.set_tablet_schema_hash(local_tablet->tablet_meta()->schema_hash());
     rowset_meta_pb.set_txn_id(txn_id);
     rowset_meta_pb.set_rowset_state(RowsetStatePB::COMMITTED);
+    LOG(INFO) << "local rowset meta pb: " << rowset_meta_pb.ShortDebugString();
     auto rowset_meta = std::make_shared<RowsetMeta>();
     if (!rowset_meta->init_from_pb(rowset_meta_pb)) {
         LOG(WARNING) << "failed to init rowset meta from " << get_rowset_meta_url;
@@ -459,17 +477,19 @@ void BackendService::ingest_binlog(TIngestBinlogResult& result,
         status.to_thrift(&result.status);
         return;
     }
+    RowsetId new_rowset_id = StorageEngine::instance()->next_rowset_id();
+    rowset_meta->set_rowset_id(new_rowset_id);
 
-    // Step 4: get all segment files
-    // Step 4.1: get all segment files size
+    // Step 5: get all segment files
+    // Step 5.1: get all segment files size
     std::vector<std::string> segment_file_urls;
     segment_file_urls.reserve(num_segments);
     std::vector<uint64_t> segment_file_sizes;
     segment_file_sizes.reserve(num_segments);
     for (int64_t segment_index = 0; segment_index < num_segments; ++segment_index) {
         auto get_segment_file_size_url = fmt::format(
-                "{}?method={}&tablet_id={}&rowset_id={}&&segment_index={}", binlog_api_url,
-                "get_segment_file", request.remote_tablet_id, rowset_id, segment_index);
+                "{}?method={}&tablet_id={}&rowset_id={}&segment_index={}", binlog_api_url,
+                "get_segment_file", request.remote_tablet_id, remote_rowset_id, segment_index);
         uint64_t segment_file_size;
         auto get_segment_file_size_cb = [&get_segment_file_size_url,
                                          &segment_file_size](HttpClient* client) {
@@ -489,7 +509,7 @@ void BackendService::ingest_binlog(TIngestBinlogResult& result,
         segment_file_urls.push_back(std::move(get_segment_file_size_url));
     }
 
-    // Step 4.3: check data capacity
+    // Step 5.2: check data capacity
     uint64_t total_size = std::accumulate(segment_file_sizes.begin(), segment_file_sizes.end(), 0);
     if (!local_tablet->can_add_binlog(total_size)) {
         LOG(WARNING) << "failed to add binlog, no enough space, total_size=" << total_size
@@ -499,7 +519,7 @@ void BackendService::ingest_binlog(TIngestBinlogResult& result,
         return;
     }
 
-    // Step 4.2: get all segment files
+    // Step 5.3: get all segment files
     for (int64_t segment_index = 0; segment_index < num_segments; ++segment_index) {
         auto segment_file_size = segment_file_sizes[segment_index];
         auto get_segment_file_url = segment_file_urls[segment_index];
@@ -510,8 +530,11 @@ void BackendService::ingest_binlog(TIngestBinlogResult& result,
             estimate_timeout = config::download_low_speed_time;
         }
 
-        // TODO(Drogon): get local segment path
-        std::string local_segment_path;
+        std::string local_segment_path =
+                fmt::format("{}/{}_{}.dat", local_tablet->tablet_path(),
+                            rowset_meta->rowset_id().to_string(), segment_index);
+        LOG(INFO) << fmt::format("download segment file from {} to {}", get_segment_file_url,
+                                 local_segment_path);
         auto get_segment_file_cb = [&get_segment_file_url, &local_segment_path, segment_file_size,
                                     estimate_timeout](HttpClient* client) {
             RETURN_IF_ERROR(client->init(get_segment_file_url));
@@ -546,14 +569,14 @@ void BackendService::ingest_binlog(TIngestBinlogResult& result,
         }
     }
 
-    // Step 5: create rowset && commit
-    // Step 5.1: create rowset
+    // Step 6: create rowset && commit
+    // Step 6.1: create rowset
     RowsetSharedPtr rowset;
     status = RowsetFactory::create_rowset(local_tablet->tablet_schema(),
                                           local_tablet->tablet_path(), rowset_meta, &rowset);
 
     if (!status) {
-        LOG(WARNING) << "failed to create rowset from rowset meta for slave replica"
+        LOG(WARNING) << "failed to create rowset from rowset meta for remote tablet"
                      << ". rowset_id: " << rowset_meta_pb.rowset_id()
                      << ", rowset_type: " << rowset_meta_pb.rowset_type()
                      << ", remote_tablet_id=" << rowset_meta_pb.tablet_id() << ", txn_id=" << txn_id
@@ -563,7 +586,7 @@ void BackendService::ingest_binlog(TIngestBinlogResult& result,
         return;
     }
 
-    // Step 5.2: commit txn
+    // Step 6.2: commit txn
     Status commit_txn_status = StorageEngine::instance()->txn_manager()->commit_txn(
             local_tablet->data_dir()->get_meta(), rowset_meta->partition_id(),
             rowset_meta->txn_id(), rowset_meta->tablet_id(), rowset_meta->tablet_schema_hash(),
