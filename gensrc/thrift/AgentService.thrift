@@ -106,10 +106,10 @@ enum TCompressionType {
 
 
 struct TBinlogConfig {
-    1: required bool enable;
-    2: required i64 ttl_seconds;
-    3: required i64 max_bytes;
-    4: required i64 max_history_nums;
+    1: optional bool enable;
+    2: optional i64 ttl_seconds;
+    3: optional i64 max_bytes;
+    4: optional i64 max_history_nums;
 }
 
 struct TCreateTabletReq {

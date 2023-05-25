@@ -59,6 +59,7 @@
 #include "runtime/stream_load/stream_load_context.h"
 #include "runtime/stream_load/stream_load_recorder.h"
 #include "util/arrow/row_batch.h"
+#include "util/defer_op.h"
 #include "util/thrift_server.h"
 #include "util/uid_util.h"
 
@@ -383,14 +384,68 @@ void BackendService::check_storage_format(TCheckStorageFormatResult& result) {
 
 void BackendService::ingest_binlog(TIngestBinlogResult& result,
                                    const TIngestBinlogRequest& request) {
+    TStatus tstatus;
+    Defer defer {[&result, &tstatus]() { result.__set_status(tstatus); }};
+    /// Check args: txn_id, remote_tablet_id, binlog_version, remote_host, remote_port, partition_id, load_id
+    if (request.__isset.txn_id) {
+        LOG(WARNING) << "txn_id is empty";
+        tstatus.__set_status_code(TStatusCode::ANALYSIS_ERROR);
+        tstatus.__isset.error_msgs = true;
+        tstatus.error_msgs.emplace_back("txn_id is empty");
+        return;
+    }
+    if (request.__isset.remote_tablet_id) {
+        LOG(WARNING) << "remote_tablet_id is empty";
+        tstatus.__set_status_code(TStatusCode::ANALYSIS_ERROR);
+        tstatus.__isset.error_msgs = true;
+        tstatus.error_msgs.emplace_back("remote_tablet_id is empty");
+        return;
+    }
+    if (request.__isset.binlog_version) {
+        LOG(WARNING) << "binlog_version is empty";
+        tstatus.__set_status_code(TStatusCode::ANALYSIS_ERROR);
+        tstatus.__isset.error_msgs = true;
+        tstatus.error_msgs.emplace_back("binlog_version is empty");
+        return;
+    }
+    if (request.__isset.remote_host) {
+        LOG(WARNING) << "remote_host is empty";
+        tstatus.__set_status_code(TStatusCode::ANALYSIS_ERROR);
+        tstatus.__isset.error_msgs = true;
+        tstatus.error_msgs.emplace_back("remote_host is empty");
+        return;
+    }
+    if (request.__isset.remote_port) {
+        LOG(WARNING) << "remote_port is empty";
+        tstatus.__set_status_code(TStatusCode::ANALYSIS_ERROR);
+        tstatus.__isset.error_msgs = true;
+        tstatus.error_msgs.emplace_back("remote_port is empty");
+        return;
+    }
+    if (request.__isset.partition_id) {
+        LOG(WARNING) << "partition_id is empty";
+        tstatus.__set_status_code(TStatusCode::ANALYSIS_ERROR);
+        tstatus.__isset.error_msgs = true;
+        tstatus.error_msgs.emplace_back("partition_id is empty");
+        return;
+    }
+    if (request.__isset.load_id) {
+        LOG(WARNING) << "load_id is empty";
+        tstatus.__set_status_code(TStatusCode::ANALYSIS_ERROR);
+        tstatus.__isset.error_msgs = true;
+        tstatus.error_msgs.emplace_back("load_id is empty");
+        return;
+    }
+
     auto txn_id = request.txn_id;
     // Step 1: get local tablet
     auto const& local_tablet_id = request.local_tablet_id;
     auto local_tablet = StorageEngine::instance()->tablet_manager()->get_tablet(local_tablet_id);
     if (local_tablet == nullptr) {
         LOG(WARNING) << "tablet " << local_tablet_id << " not found";
-        result.status.__set_status_code(TStatusCode::RUNTIME_ERROR);
-        result.status.error_msgs.emplace_back(fmt::format("tablet {} not found", local_tablet_id));
+        tstatus.__set_status_code(TStatusCode::RUNTIME_ERROR);
+        tstatus.__isset.error_msgs = true;
+        tstatus.error_msgs.emplace_back(fmt::format("tablet {} not found", local_tablet_id));
         return;
     }
 
@@ -406,7 +461,7 @@ void BackendService::ingest_binlog(TIngestBinlogResult& result,
     if (!status.ok()) {
         LOG(WARNING) << "prepare txn failed. txn_id=" << txn_id
                      << ", status=" << status.to_string();
-        status.to_thrift(&result.status);
+        status.to_thrift(&tstatus);
         return;
     }
 
@@ -428,7 +483,7 @@ void BackendService::ingest_binlog(TIngestBinlogResult& result,
     if (!status.ok()) {
         LOG(WARNING) << "failed to get binlog info from " << get_binlog_info_url
                      << ", status=" << status.to_string();
-        status.to_thrift(&result.status);
+        status.to_thrift(&tstatus);
         return;
     }
 
@@ -452,14 +507,14 @@ void BackendService::ingest_binlog(TIngestBinlogResult& result,
     if (!status.ok()) {
         LOG(WARNING) << "failed to get rowset meta from " << get_rowset_meta_url
                      << ", status=" << status.to_string();
-        status.to_thrift(&result.status);
+        status.to_thrift(&tstatus);
         return;
     }
     RowsetMetaPB rowset_meta_pb;
     if (!rowset_meta_pb.ParseFromString(rowset_meta_str)) {
         LOG(WARNING) << "failed to parse rowset meta from " << get_rowset_meta_url;
         status = Status::InternalError("failed to parse rowset meta");
-        status.to_thrift(&result.status);
+        status.to_thrift(&tstatus);
         return;
     }
     LOG(INFO) << "remote rowset meta pb: " << rowset_meta_pb.ShortDebugString();
@@ -474,7 +529,7 @@ void BackendService::ingest_binlog(TIngestBinlogResult& result,
     if (!rowset_meta->init_from_pb(rowset_meta_pb)) {
         LOG(WARNING) << "failed to init rowset meta from " << get_rowset_meta_url;
         status = Status::InternalError("failed to init rowset meta");
-        status.to_thrift(&result.status);
+        status.to_thrift(&tstatus);
         return;
     }
     RowsetId new_rowset_id = StorageEngine::instance()->next_rowset_id();
@@ -502,7 +557,7 @@ void BackendService::ingest_binlog(TIngestBinlogResult& result,
         if (!status.ok()) {
             LOG(WARNING) << "failed to get segment file size from " << get_segment_file_size_url
                          << ", status=" << status.to_string();
-            status.to_thrift(&result.status);
+            status.to_thrift(&tstatus);
             return;
         }
         segment_file_sizes.push_back(segment_file_size);
@@ -515,7 +570,7 @@ void BackendService::ingest_binlog(TIngestBinlogResult& result,
         LOG(WARNING) << "failed to add binlog, no enough space, total_size=" << total_size
                      << ", tablet=" << local_tablet->full_name();
         status = Status::InternalError("no enough space");
-        status.to_thrift(&result.status);
+        status.to_thrift(&tstatus);
         return;
     }
 
@@ -564,7 +619,7 @@ void BackendService::ingest_binlog(TIngestBinlogResult& result,
         if (!status.ok()) {
             LOG(WARNING) << "failed to get segment file from " << get_segment_file_url
                          << ", status=" << status.to_string();
-            status.to_thrift(&result.status);
+            status.to_thrift(&tstatus);
             return;
         }
     }
@@ -581,8 +636,7 @@ void BackendService::ingest_binlog(TIngestBinlogResult& result,
                      << ", rowset_type: " << rowset_meta_pb.rowset_type()
                      << ", remote_tablet_id=" << rowset_meta_pb.tablet_id() << ", txn_id=" << txn_id
                      << ", status=" << status.to_string();
-        result.status.__set_status_code(TStatusCode::RUNTIME_ERROR);
-        result.status.__set_error_msgs({status.to_string()});
+        status.to_thrift(&tstatus);
         return;
     }
 
@@ -595,11 +649,12 @@ void BackendService::ingest_binlog(TIngestBinlogResult& result,
         LOG(WARNING) << "failed to add committed rowset for slave replica. rowset_id="
                      << rowset_meta->rowset_id() << ", tablet_id=" << rowset_meta->tablet_id()
                      << ", txn_id=" << rowset_meta->txn_id();
-        result.status.__set_status_code(TStatusCode::RUNTIME_ERROR);
-        result.status.__set_error_msgs({commit_txn_status.to_string()});
+        tstatus.__set_status_code(TStatusCode::RUNTIME_ERROR);
+        tstatus.__isset.error_msgs = true;
+        tstatus.__set_error_msgs({commit_txn_status.to_string()});
         return;
     }
 
-    result.status.__set_status_code(TStatusCode::OK);
+    tstatus.__set_status_code(TStatusCode::OK);
 }
 } // namespace doris

@@ -1024,6 +1024,23 @@ public class FrontendServiceImpl implements FrontendService.Iface {
     }
 
     private TBeginTxnResult beginTxnImpl(TBeginTxnRequest request, String clientIp) throws UserException {
+        /// Check required arg: user, passwd, db, tables, label
+        if (!request.isSetUser()) {
+            throw new UserException("user is not set");
+        }
+        if (!request.isSetPasswd()) {
+            throw new UserException("passwd is not set");
+        }
+        if (!request.isSetDb()) {
+            throw new UserException("db is not set");
+        }
+        if (!request.isSetTables()) {
+            throw new UserException("tables is not set");
+        }
+        if (!request.isSetLabel()) {
+            throw new UserException("label is not set");
+        }
+
         String cluster = request.getCluster();
         if (Strings.isNullOrEmpty(cluster)) {
             cluster = SystemInfoService.DEFAULT_CLUSTER;
@@ -1313,6 +1330,23 @@ public class FrontendServiceImpl implements FrontendService.Iface {
 
     // return true if commit success and publish success, return false if publish timeout
     private boolean commitTxnImpl(TCommitTxnRequest request) throws UserException {
+        /// Check required arg: user, passwd, db, txn_id, commit_infos
+        if (!request.isSetUser()) {
+            throw new UserException("user is not set");
+        }
+        if (!request.isSetPasswd()) {
+            throw new UserException("passwd is not set");
+        }
+        if (!request.isSetDb()) {
+            throw new UserException("db is not set");
+        }
+        if (!request.isSetTxnId()) {
+            throw new UserException("txn_id is not set");
+        }
+        if (!request.isSetCommitInfos()) {
+            throw new UserException("commit_infos is not set");
+        }
+
         String cluster = request.getCluster();
         if (Strings.isNullOrEmpty(cluster)) {
             cluster = SystemInfoService.DEFAULT_CLUSTER;
@@ -1371,7 +1405,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
                 .commitAndPublishTransaction(db, tableList,
                         request.getTxnId(),
                         TabletCommitInfo.fromThrift(request.getCommitInfos()), timeoutMs,
-                        TxnCommitAttachment.fromThrift(request.txnCommitAttachment));
+                        TxnCommitAttachment.fromThrift(request.getTxnCommitAttachment()));
     }
 
     @Override
@@ -1457,6 +1491,20 @@ public class FrontendServiceImpl implements FrontendService.Iface {
     }
 
     private void rollbackTxnImpl(TRollbackTxnRequest request) throws UserException {
+        /// Check required arg: user, passwd, db, txn_id
+        if (!request.isSetUser()) {
+            throw new UserException("user is not set");
+        }
+        if (!request.isSetPasswd()) {
+            throw new UserException("passwd is not set");
+        }
+        if (!request.isSetDb()) {
+            throw new UserException("db is not set");
+        }
+        if (!request.isSetTxnId()) {
+            throw new UserException("txn_id is not set");
+        }
+
         String cluster = request.getCluster();
         if (Strings.isNullOrEmpty(cluster)) {
             cluster = SystemInfoService.DEFAULT_CLUSTER;
@@ -1984,6 +2032,20 @@ public class FrontendServiceImpl implements FrontendService.Iface {
     }
 
     private TGetBinlogResult getBinlogImpl(TGetBinlogRequest request, String clientIp) throws UserException {
+        /// Check all required arg: user, passwd, db, prev_commit_seq
+        if (!request.isSetUser()) {
+            throw new UserException("user is not set");
+        }
+        if (!request.isSetPasswd()) {
+            throw new UserException("passwd is not set");
+        }
+        if (!request.isSetDb()) {
+            throw new UserException("db is not set");
+        }
+        if (!request.isSetPrevCommitSeq()) {
+            throw new UserException("prev_commit_seq is not set");
+        }
+
         String cluster = request.getCluster();
         if (Strings.isNullOrEmpty(cluster)) {
             cluster = SystemInfoService.DEFAULT_CLUSTER;

@@ -523,19 +523,14 @@ struct TLoadTxnBeginResult {
     4: optional i64 db_id
 }
 
-struct Coordinator {
-    1: required string host
-    2: required i32 port
-}
-
 struct TBeginTxnRequest {
     1: optional string cluster
-    2: required string user
-    3: required string passwd
-    4: required string db
-    5: required list<string> tables
+    2: optional string user
+    3: optional string passwd
+    4: optional string db
+    5: optional list<string> tables
     6: optional string user_ip
-    7: required string label
+    7: optional string label
     8: optional i64 auth_code
     // The real value of timeout should be i32. i64 ensures the compatibility of interface.
     9: optional i64 timeout
@@ -544,8 +539,8 @@ struct TBeginTxnRequest {
 }
 
 struct TBeginTxnResult {
-    1: required Status.TStatus status
-    2: optional i64 txnId
+    1: optional Status.TStatus status
+    2: optional i64 txn_id
     3: optional string job_status // if label already used, set status of existing job
     4: optional i64 db_id
 }
@@ -663,21 +658,21 @@ struct TLoadTxnCommitResult {
 
 struct TCommitTxnRequest {
     1: optional string cluster
-    2: required string user
-    3: required string passwd
-    4: required string db
+    2: optional string user
+    3: optional string passwd
+    4: optional string db
     5: optional string user_ip
-    6: required i64 txnId
-    7: required list<Types.TTabletCommitInfo> commitInfos
+    6: optional i64 txn_id
+    7: optional list<Types.TTabletCommitInfo> commit_infos
     8: optional i64 auth_code
-    9: optional TTxnCommitAttachment txnCommitAttachment
+    9: optional TTxnCommitAttachment txn_commit_attachment
     10: optional i64 thrift_rpc_timeout_ms
     11: optional string token
     12: optional i64 db_id
 }
 
 struct TCommitTxnResult {
-    1: required Status.TStatus status
+    1: optional Status.TStatus status
 }
 
 struct TLoadTxn2PCRequest {
@@ -699,20 +694,20 @@ struct TLoadTxn2PCResult {
 
 struct TRollbackTxnRequest {
     1: optional string cluster
-    2: required string user
-    3: required string passwd
-    4: required string db
+    2: optional string user
+    3: optional string passwd
+    4: optional string db
     5: optional string user_ip
-    6: required i64 txnId
+    6: optional i64 txn_id
     7: optional string reason
     9: optional i64 auth_code
-    10: optional TTxnCommitAttachment txnCommitAttachment
+    10: optional TTxnCommitAttachment txn_commit_attachment
     11: optional string token
     12: optional i64 db_id
 }
 
 struct TRollbackTxnResult {
-    1: required Status.TStatus status
+    1: optional Status.TStatus status
 }
 
 struct TLoadTxnRollbackRequest {
@@ -936,13 +931,13 @@ struct TQueryStatsResult {
 
 struct TGetBinlogRequest {
     1: optional string cluster
-    2: required string user
-    3: required string passwd
-    4: required string db
+    2: optional string user
+    3: optional string passwd
+    4: optional string db
     5: optional string table
     6: optional string user_ip
     7: optional string token
-    8: required i64 prev_commit_seq
+    8: optional i64 prev_commit_seq
 }
 
 enum TBinlogType {
@@ -952,16 +947,16 @@ enum TBinlogType {
 }
 
 struct TBinlog {
-    1: required i64 commit_seq
-    2: required i64 timestamp
-    3: required TBinlogType type
-    4: required i64 db_id
+    1: optional i64 commit_seq
+    2: optional i64 timestamp
+    3: optional TBinlogType type
+    4: optional i64 db_id
     5: optional list<i64> table_ids
-    6: required string data
+    6: optional string data
 }
 
 struct TGetBinlogResult {
-    1: required Status.TStatus status
+    1: optional Status.TStatus status
     2: optional i64 next_commit_seq
     3: optional list<TBinlog> binlogs
     4: optional string fe_version

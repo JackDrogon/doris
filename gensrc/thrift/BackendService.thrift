@@ -122,18 +122,18 @@ struct TCheckStorageFormatResult {
 }
 
 struct TIngestBinlogRequest {
-    1: required i64 txn_id;
-    2: required i64 remote_tablet_id;
-    3: required i64 binlog_version;
-    4: required string remote_host;
-    5: required string remote_port;
-    6: required i64 partition_id;
-    7: required i64 local_tablet_id;
-    8: required Types.TUniqueId load_id;
+    1: optional i64 txn_id;
+    2: optional i64 remote_tablet_id;
+    3: optional i64 binlog_version;
+    4: optional string remote_host;
+    5: optional string remote_port;
+    6: optional i64 partition_id;
+    7: optional i64 local_tablet_id;
+    8: optional Types.TUniqueId load_id;
 }
 
 struct TIngestBinlogResult {
-    1: required Status.TStatus status;
+    1: optional Status.TStatus status;
 }
 
 service BackendService {

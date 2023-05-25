@@ -24,18 +24,34 @@
 
 namespace doris {
 BinlogConfig& BinlogConfig::operator=(const TBinlogConfig& config) {
-    _enable = config.enable;
-    _ttl_seconds = config.ttl_seconds;
-    _max_bytes = config.max_bytes;
-    _max_history_nums = config.max_history_nums;
+    if (config.__isset.enable) {
+        _enable = config.enable;
+    }
+    if (config.__isset.ttl_seconds) {
+        _ttl_seconds = config.ttl_seconds;
+    }
+    if (config.__isset.max_bytes) {
+        _max_bytes = config.max_bytes;
+    }
+    if (config.__isset.max_history_nums) {
+        _max_history_nums = config.max_history_nums;
+    }
     return *this;
 }
 
 BinlogConfig& BinlogConfig::operator=(const BinlogConfigPB& config) {
-    _enable = config.enable();
-    _ttl_seconds = config.ttl_seconds();
-    _max_bytes = config.max_bytes();
-    _max_history_nums = config.max_history_nums();
+    if (config.has_enable()) {
+        _enable = config.enable();
+    }
+    if (config.has_ttl_seconds()) {
+        _ttl_seconds = config.ttl_seconds();
+    }
+    if (config.has_max_bytes()) {
+        _max_bytes = config.max_bytes();
+    }
+    if (config.has_max_history_nums()) {
+        _max_history_nums = config.max_history_nums();
+    }
     return *this;
 }
 
@@ -47,8 +63,9 @@ void BinlogConfig::to_pb(BinlogConfigPB* config_pb) const {
 }
 
 std::string BinlogConfig::to_string() const {
-    return fmt::format("BinlogConfig enable: {}, ttl_seconds: {}, max_bytes: {}, max_history_nums: {}", _enable,
-                       _ttl_seconds, _max_bytes, _max_history_nums);
+    return fmt::format(
+            "BinlogConfig enable: {}, ttl_seconds: {}, max_bytes: {}, max_history_nums: {}",
+            _enable, _ttl_seconds, _max_bytes, _max_history_nums);
 }
 
 } // namespace doris

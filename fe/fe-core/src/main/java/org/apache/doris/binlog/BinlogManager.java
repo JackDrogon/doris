@@ -83,7 +83,13 @@ public class BinlogManager {
 
     private void addBinlog(long dbId, List<Long> tableIds, long commitSeq, long timestamp, TBinlogType type,
                            String data) {
-        TBinlog binlog = new TBinlog(commitSeq, timestamp, type, dbId, data);
+        TBinlog binlog = new TBinlog();
+        // set commitSeq, timestamp, type, dbId, data
+        binlog.setCommitSeq(commitSeq);
+        binlog.setTimestamp(timestamp);
+        binlog.setType(type);
+        binlog.setDbId(dbId);
+        binlog.setData(data);
         if (tableIds != null && !tableIds.isEmpty()) {
             binlog.setTableIds(tableIds);
         }

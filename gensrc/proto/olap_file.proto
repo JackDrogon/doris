@@ -267,10 +267,10 @@ message S3StorageParamPB {
 }
 
 message BinlogConfigPB {
-    required bool enable = 1;
-    required int64 ttl_seconds = 2;
-    required int64 max_bytes = 3;
-    required int64 max_history_nums = 4;
+    optional bool enable = 1;
+    optional int64 ttl_seconds = 2;
+    optional int64 max_bytes = 3;
+    optional int64 max_history_nums = 4;
 }
 
 message TabletMetaPB {
@@ -323,9 +323,9 @@ message DeleteBitmapPB {
 }
 
 message BinlogMetaEntryPB {
-    required int64 version = 1;
-    required int64 tablet_id = 2;
-    required int64 rowset_id = 3;
-    required int64 num_segments = 4;
-    required int64 creation_time = 5;
+    optional int64 version = 1;
+    optional int64 tablet_id = 2;
+    optional int64 rowset_id = 3;
+    optional int64 num_segments = 4;
+    optional int64 creation_time = 5;
 }
