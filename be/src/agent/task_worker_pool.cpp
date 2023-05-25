@@ -27,6 +27,8 @@
 
 #include <algorithm>
 // IWYU pragma: no_include <bits/chrono.h>
+#include <thrift/protocol/TDebugProtocol.h>
+
 #include <chrono> // IWYU pragma: keep
 #include <ctime>
 #include <functional>
