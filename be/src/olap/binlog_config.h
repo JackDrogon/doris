@@ -30,7 +30,10 @@ class BinlogConfig {
 public:
     BinlogConfig() = default;
     BinlogConfig(bool enable, int64_t ttl_seconds, int64_t max_bytes, int64_t max_history_nums)
-            : _enable(enable), _ttl_seconds(ttl_seconds), _max_bytes(max_bytes), _max_history_nums(max_history_nums) {}
+            : _enable(enable),
+              _ttl_seconds(ttl_seconds),
+              _max_bytes(max_bytes),
+              _max_history_nums(max_history_nums) {}
     BinlogConfig(const BinlogConfig&) = default;
     BinlogConfig& operator=(const BinlogConfig&) = default;
     BinlogConfig(BinlogConfig&&) = default;
