@@ -62,6 +62,7 @@ import org.apache.doris.catalog.TableIf.TableType;
 import org.apache.doris.catalog.Tablet;
 import org.apache.doris.catalog.View;
 import org.apache.doris.common.AnalysisException;
+import org.apache.doris.common.Config;
 import org.apache.doris.common.DdlException;
 import org.apache.doris.common.MetaNotFoundException;
 import org.apache.doris.common.UserException;
@@ -219,6 +220,9 @@ public class Alter {
             olapTable.setCcrEnable(currentAlterOps.isCcrEnable(alterClauses));
             needProcessOutsideTableLock = true;
         } else if (currentAlterOps.checkBinlogConfigChange(alterClauses)) {
+            if (!Config.enable_feature_binlog) {
+                throw new DdlException("Binlog feature is not enabled");
+            }
             // TODO(Drogon): check error
             ((SchemaChangeHandler) schemaChangeHandler).updateBinlogConfig(db, olapTable, alterClauses);
         } else if (currentAlterOps.hasSchemaChangeOp()) {

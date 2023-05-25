@@ -233,6 +233,8 @@ public class EditLog {
                     LOG.info(
                             "Begin to unprotect add partition. db = " + info.getDbId() + " table = " + info.getTableId()
                                     + " partitionName = " + info.getPartition().getName());
+                    AddPartitionRecord addPartitionRecord = new AddPartitionRecord(logId, info);
+                    Env.getCurrentEnv().getBinlogManager().addAddPartitionRecord(addPartitionRecord);
                     env.replayAddPartition(info);
                     break;
                 }

@@ -84,7 +84,6 @@ public class AlterOperations {
         ).anyMatch(clause -> clause.getProperties().containsKey(PropertyAnalyzer.PROPERTIES_CCR_ENABLE));
     }
 
-    @SuppressWarnings("checkstyle:OperatorWrap")
     public boolean checkBinlogConfigChange(List<AlterClause> alterClauses) {
         return alterClauses.stream().filter(clause ->
             clause instanceof ModifyTablePropertiesClause
