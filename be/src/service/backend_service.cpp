@@ -386,6 +386,15 @@ void BackendService::ingest_binlog(TIngestBinlogResult& result,
                                    const TIngestBinlogRequest& request) {
     TStatus tstatus;
     Defer defer {[&result, &tstatus]() { result.__set_status(tstatus); }};
+
+    if (!config::enable_feature_binlog) {
+        LOG(WARNING) << "enable feature binlog is false";
+        tstatus.__set_status_code(TStatusCode::NOT_IMPLEMENTED_ERROR);
+        tstatus.__isset.error_msgs = true;
+        tstatus.error_msgs.emplace_back("enable feature binlog is false");
+        return;
+    }
+
     /// Check args: txn_id, remote_tablet_id, binlog_version, remote_host, remote_port, partition_id, load_id
     if (request.__isset.txn_id) {
         LOG(WARNING) << "txn_id is empty";

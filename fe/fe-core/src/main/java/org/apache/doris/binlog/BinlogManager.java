@@ -17,6 +17,7 @@
 
 package org.apache.doris.binlog;
 
+import org.apache.doris.common.Config;
 import org.apache.doris.common.Pair;
 import org.apache.doris.thrift.TBinlog;
 import org.apache.doris.thrift.TBinlogType;
@@ -60,6 +61,10 @@ public class BinlogManager {
     }
 
     private void addBinlog(TBinlog binlog) {
+        if (!Config.enable_feature_binlog) {
+            return;
+        }
+
         LOG.info("add binlog : {}", binlog);
 
         long dbId = binlog.getDbId();
@@ -183,6 +188,10 @@ public class BinlogManager {
 
     // not thread safety, do this without lock
     public long write(DataOutputStream dos, long checksum) throws IOException {
+        if (!Config.enable_feature_binlog) {
+            return checksum;
+        }
+
         List<TBinlog> binlogs = new ArrayList<TBinlog>();
         // Step 1: get all binlogs
         for (DBBinlog dbBinlog : dbBinlogMap.values()) {
@@ -251,6 +260,10 @@ public class BinlogManager {
     }
 
     public long read(DataInputStream dis, long checksum) throws IOException {
+        if (!Config.enable_feature_binlog) {
+            return checksum;
+        }
+
         // Step 1: read binlogs length
         int size = dis.readInt();
         LOG.info("read binlogs length: {}", size);

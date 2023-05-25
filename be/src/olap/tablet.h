@@ -496,9 +496,9 @@ public:
 
     // binlog releated functions
     bool is_enable_binlog();
-    bool is_binlog_enabled() { return _binlog_enabled; }
-    int64_t binlog_ttl_ms() const { return _binlog_ttl_ms; }
-    int64_t binlog_max_size() const { return _binlog_max_size; }
+    bool is_binlog_enabled() { return _tablet_meta->binlog_config().is_enable(); }
+    int64_t binlog_ttl_ms() const { return _tablet_meta->binlog_config().ttl_seconds(); }
+    int64_t binlog_max_bytes() const { return _tablet_meta->binlog_config().max_bytes(); }
 
     void set_binlog_config(BinlogConfig binlog_config);
 
@@ -637,11 +637,6 @@ private:
     DISALLOW_COPY_AND_ASSIGN(Tablet);
 
     int64_t _io_error_times = 0;
-
-    // binlog info
-    std::atomic<bool> _binlog_enabled {false};
-    std::atomic<int64_t> _binlog_ttl_ms {std::numeric_limits<int64_t>::max()};
-    std::atomic<int64_t> _binlog_max_size {std::numeric_limits<int64_t>::max()};
 
 public:
     IntCounter* flush_bytes;

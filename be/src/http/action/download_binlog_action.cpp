@@ -146,6 +146,11 @@ DownloadBinlogAction::DownloadBinlogAction(ExecEnv* exec_env) : _exec_env(exec_e
 void DownloadBinlogAction::handle(HttpRequest* req) {
     VLOG_CRITICAL << "accept one download binlog request " << req->debug_string();
 
+    if (!config::enable_feature_binlog) {
+        HttpChannel::send_reply(req, "binlog feature is not enabled.");
+        return;
+    }
+
     // Step 1: check token
     Status status;
     if (config::enable_token_check) {
