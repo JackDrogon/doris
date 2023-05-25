@@ -3083,8 +3083,10 @@ public class Env {
             sb.append(olapTable.disableAutoCompaction()).append("\"");
 
             // binlog
-            BinlogConfig binlogConfig = olapTable.getBinlogConfig();
-            binlogConfig.appendToShowCreateTable(sb);
+            if (Config.enable_feature_binlog) {
+                BinlogConfig binlogConfig = olapTable.getBinlogConfig();
+                binlogConfig.appendToShowCreateTable(sb);
+            }
 
             sb.append("\n)");
         } else if (table.getType() == TableType.MYSQL) {

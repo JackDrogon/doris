@@ -404,9 +404,11 @@ Status TxnManager::publish_txn(OlapMeta* meta, TPartitionId partition_id,
     }
 
     // TODO(Drogon): remove these test codes
-    auto version_str = fmt::format("{}", version.first);
-    LOG(INFO) << fmt::format("tabletid: {}, version: {}, binlog filepath: {}", tablet_id,
-                             version_str, tablet->get_binlog_filepath(version_str));
+    if (enable_binlog) {
+        auto version_str = fmt::format("{}", version.first);
+        LOG(INFO) << fmt::format("tabletid: {}, version: {}, binlog filepath: {}", tablet_id,
+                                 version_str, tablet->get_binlog_filepath(version_str));
+    }
 
     /// Step 5: remove tablet_info from tnx_tablet_map
     // txn_tablet_map[key] empty, remove key from txn_tablet_map

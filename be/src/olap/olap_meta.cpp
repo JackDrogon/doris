@@ -238,7 +238,8 @@ Status OlapMeta::remove(const int column_family_index, const std::vector<std::st
     }
     DorisMetrics::instance()->meta_write_request_duration_us->increment(duration_ns / 1000);
     if (!s.ok()) {
-        LOG(WARNING) << "rocks db delete key:" << keys << " failed, reason:" << s.ToString();
+        LOG(WARNING) << fmt::format("rocks db delete keys:{} failed, reason:{}", keys,
+                                    s.ToString());
         return Status::Error<META_DELETE_ERROR>();
     }
     return Status::OK();
