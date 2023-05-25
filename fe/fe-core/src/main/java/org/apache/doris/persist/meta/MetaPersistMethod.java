@@ -220,6 +220,7 @@ public class MetaPersistMethod {
                         Env.class.getDeclaredMethod("loadBinlogs", DataInputStream.class, long.class);
                 metaPersistMethod.writeMethod =
                         Env.class.getDeclaredMethod("saveBinlogs", CountingDataOutputStream.class, long.class);
+                break;
             default:
                 break;
         }

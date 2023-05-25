@@ -1366,6 +1366,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
 
 
         // Step 5: commit and publish
+        LOG.info("commit txn: {}, db: {}, tableList: {}", request.getTxnId(), db, tableList);
         return Env.getCurrentGlobalTransactionMgr()
                 .commitAndPublishTransaction(db, tableList,
                         request.getTxnId(),
@@ -2023,8 +2024,8 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         TGetBinlogResult result = new TGetBinlogResult();
         result.setStatus(new TStatus(TStatusCode.OK));
         long prevCommitSeq = request.getPrevCommitSeq();
-        Pair<TStatus, TBinlog> status_binlog_pair = env.getBinlogManager().getBinlog(dbId, tableId, prevCommitSeq);
-        TStatus status = status_binlog_pair.first;
+        Pair<TStatus, TBinlog> statusBinlogPair = env.getBinlogManager().getBinlog(dbId, tableId, prevCommitSeq);
+        TStatus status = statusBinlogPair.first;
         if (status != null && status.getStatusCode() != TStatusCode.OK) {
             result.setStatus(status);
             // TOO_OLD return first exist binlog
@@ -2032,7 +2033,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
                 return result;
             }
         }
-        TBinlog binlog = status_binlog_pair.second;
+        TBinlog binlog = statusBinlogPair.second;
         if (binlog != null) {
             List<TBinlog> binlogs = Lists.newArrayList();
             binlogs.add(binlog);

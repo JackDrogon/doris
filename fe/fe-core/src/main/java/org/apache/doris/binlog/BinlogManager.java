@@ -81,7 +81,8 @@ public class BinlogManager {
         dbBinlog.addBinlog(binlog);
     }
 
-    private void addBinlog(long dbId, List<Long> tableIds, long commitSeq, long timestamp, TBinlogType type, String data) {
+    private void addBinlog(long dbId, List<Long> tableIds, long commitSeq, long timestamp, TBinlogType type,
+                           String data) {
         TBinlog binlog = new TBinlog(commitSeq, timestamp, type, dbId, data);
         if (tableIds != null && !tableIds.isEmpty()) {
             binlog.setTableIds(tableIds);
@@ -144,7 +145,7 @@ public class BinlogManager {
             // user iterator to remove element in timestamps
             for (Iterator<Pair<Long, Long>> iterator = timestamps.iterator(); iterator.hasNext();) {
                 Pair<Long, Long> pair = iterator.next();
-                long commitSeq = pair.first;
+                // long commitSeq = pair.first;
                 long timestamp = pair.second;
 
                 if (timestamp >= minTimestamp) {

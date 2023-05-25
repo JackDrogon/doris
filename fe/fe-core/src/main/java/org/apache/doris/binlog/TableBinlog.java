@@ -18,7 +18,6 @@
 package org.apache.doris.binlog;
 
 import org.apache.doris.common.Pair;
-
 import org.apache.doris.thrift.TBinlog;
 import org.apache.doris.thrift.TStatus;
 

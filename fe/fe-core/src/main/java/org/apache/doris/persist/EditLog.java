@@ -23,8 +23,8 @@ import org.apache.doris.analysis.UserIdentity;
 import org.apache.doris.backup.BackupJob;
 import org.apache.doris.backup.Repository;
 import org.apache.doris.backup.RestoreJob;
-import org.apache.doris.binlog.UpsertRecord;
 import org.apache.doris.binlog.AddPartitionRecord;
+import org.apache.doris.binlog.UpsertRecord;
 import org.apache.doris.blockrule.SqlBlockRule;
 import org.apache.doris.catalog.BrokerMgr;
 import org.apache.doris.catalog.Database;
@@ -83,7 +83,7 @@ import org.apache.doris.system.Backend;
 import org.apache.doris.system.Frontend;
 import org.apache.doris.transaction.TransactionState;
 import org.apache.doris.transaction.TransactionStatus;
-import org.apache.hadoop.hive.metastore.api.AddPartitionsResult;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 

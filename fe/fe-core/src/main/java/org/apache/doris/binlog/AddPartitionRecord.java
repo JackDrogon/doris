@@ -22,8 +22,8 @@ import org.apache.doris.catalog.Partition;
 import org.apache.doris.catalog.PartitionItem;
 import org.apache.doris.catalog.PartitionKey;
 import org.apache.doris.catalog.ReplicaAllocation;
-import org.apache.doris.persist.gson.GsonUtils;
 import org.apache.doris.persist.PartitionPersistInfo;
+import org.apache.doris.persist.gson.GsonUtils;
 
 import com.google.common.collect.Range;
 import com.google.gson.annotations.SerializedName;
@@ -77,7 +77,7 @@ public class AddPartitionRecord {
     public long getTableId() {
         return tableId;
     }
-    
+
     public String toJson() {
         return GsonUtils.GSON.toJson(this);
     }
