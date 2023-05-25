@@ -2515,7 +2515,6 @@ public class Env {
             if (entity == null) {
                 break;
             }
-            LOG.info("replay journal id: {}, entity: {}", kv.first, entity);
             hasLog = true;
             EditLog.loadJournal(this, logId, entity);
             replayedJournalId.incrementAndGet();

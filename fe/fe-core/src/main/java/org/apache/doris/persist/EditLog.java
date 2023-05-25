@@ -153,7 +153,6 @@ public class EditLog {
      * Load journal.
      **/
     public static void loadJournal(Env env, Long logId, JournalEntity journal) {
-        LOG.info("replay journal id: {}", logId);
         short opCode = journal.getOpCode();
         if (opCode != OperationType.OP_SAVE_NEXTID && opCode != OperationType.OP_TIMESTAMP) {
             LOG.debug("replay journal op code: {}", opCode);
@@ -515,13 +514,10 @@ public class EditLog {
                 case OperationType.OP_UPSERT_TRANSACTION_STATE: {
                     final TransactionState state = (TransactionState) journal.getData();
                     Env.getCurrentGlobalTransactionMgr().replayUpsertTransactionState(state);
-                    LOG.info("logid: {}, opcode: {}, tid: {}, json: {}", logId, opCode, state.getTransactionId(),
-                            state.toJson());
+                    LOG.debug("logid: {}, opcode: {}, tid: {}", logId, opCode, state.getTransactionId());
 
                     if (state.getTransactionStatus() == TransactionStatus.VISIBLE) {
                         UpsertRecord upsertRecord = new UpsertRecord(logId, state);
-                        LOG.info("logid: {}, upsert record: {}", logId, upsertRecord);
-                        LOG.debug("opcode: {}, tid: {}", opCode, state.getTransactionId());
                         Env.getCurrentEnv().getBinlogManager().addUpsertRecord(upsertRecord);
                     }
                     break;
@@ -1077,7 +1073,6 @@ public class EditLog {
         long start = System.currentTimeMillis();
         long logId = -1;
         try {
-            LOG.info("write op {} to edit log, writable: {}", op, writable);
             logId = journal.write(op, writable);
         } catch (Throwable t) {
             // Throwable contains all Exception and Error, such as IOException and
@@ -1144,8 +1139,7 @@ public class EditLog {
     }
 
     public void logCreateDb(Database db) {
-        long logId = logEdit(OperationType.OP_CREATE_DB, db);
-        LOG.info("log create db: {}, logId: {}", db, logId);
+        logEdit(OperationType.OP_CREATE_DB, db);
     }
 
     public void logDropDb(DropDbInfo dropDbInfo) {
@@ -1174,14 +1168,11 @@ public class EditLog {
 
     public void logAddPartition(PartitionPersistInfo info) {
         long logId = logEdit(OperationType.OP_ADD_PARTITION, info);
-        LOG.info("log add partition: {}, logId: {}", info, logId);
         AddPartitionRecord record = new AddPartitionRecord(logId, info);
         Env.getCurrentEnv().getBinlogManager().addAddPartitionRecord(record);
-        LOG.info("EditLog upsert record: {}", record.toString());
     }
 
     public void logDropPartition(DropPartitionInfo info) {
-        LOG.info("EditLog logDropPartition: {}", info);
         logEdit(OperationType.OP_DROP_PARTITION, info);
     }
 
@@ -1392,7 +1383,6 @@ public class EditLog {
         if (transactionState.getTransactionStatus() == TransactionStatus.VISIBLE) {
             UpsertRecord record = new UpsertRecord(logId, transactionState);
             Env.getCurrentEnv().getBinlogManager().addUpsertRecord(record);
-            LOG.info("EditLog upsert record: {}", record.toString());
         }
     }
 

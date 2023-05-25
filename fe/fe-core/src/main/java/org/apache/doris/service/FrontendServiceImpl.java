@@ -991,7 +991,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
     @Override
     public TBeginTxnResult beginTxn(TBeginTxnRequest request) throws TException {
         String clientAddr = getClientAddrAsString();
-        LOG.info("receive txn begin request: {}, client: {}", request, clientAddr);
+        LOG.debug("receive txn begin request: {}, client: {}", request, clientAddr);
 
         TBeginTxnResult result = new TBeginTxnResult();
         TStatus status = new TStatus(TStatusCode.OK);
@@ -1019,7 +1019,6 @@ public class FrontendServiceImpl implements FrontendService.Iface {
             return result;
         }
 
-        LOG.info("BeginTxn result is {}", result);
         return result;
     }
 
@@ -1092,7 +1091,6 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         // step 7: return result
         TBeginTxnResult result = new TBeginTxnResult();
         result.setTxnId(txnId).setDbId(db.getId());
-        LOG.info("BeginTxnImpl result is {}", result);
         return result;
     }
 
@@ -1304,7 +1302,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
     @Override
     public TCommitTxnResult commitTxn(TCommitTxnRequest request) throws TException {
         String clientAddr = getClientAddrAsString();
-        LOG.info("receive txn commit request: {}, client: {}", request, clientAddr);
+        LOG.debug("receive txn commit request: {}, client: {}", request, clientAddr);
 
         TCommitTxnResult result = new TCommitTxnResult();
         TStatus status = new TStatus(TStatusCode.OK);
@@ -1400,7 +1398,6 @@ public class FrontendServiceImpl implements FrontendService.Iface {
 
 
         // Step 5: commit and publish
-        LOG.info("commit txn: {}, db: {}, tableList: {}", request.getTxnId(), db, tableList);
         return Env.getCurrentGlobalTransactionMgr()
                 .commitAndPublishTransaction(db, tableList,
                         request.getTxnId(),
@@ -2009,7 +2006,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
 
     public TGetBinlogResult getBinlog(TGetBinlogRequest request) throws TException {
         String clientAddr = getClientAddrAsString();
-        LOG.info("receive get binlog request: {}", request);
+        LOG.debug("receive get binlog request: {}", request);
 
         TGetBinlogResult result = new TGetBinlogResult();
         TStatus status = new TStatus(TStatusCode.OK);
@@ -2027,7 +2024,6 @@ public class FrontendServiceImpl implements FrontendService.Iface {
             return result;
         }
 
-        LOG.info("get binlog success. request: {}, result: {}", request, result);
         return result;
     }
 

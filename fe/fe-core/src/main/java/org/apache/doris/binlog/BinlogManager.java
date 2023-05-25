@@ -65,8 +65,6 @@ public class BinlogManager {
             return;
         }
 
-        LOG.info("add binlog : {}", binlog);
-
         long dbId = binlog.getDbId();
         DBBinlog dbBinlog;
         lock.writeLock().lock();
@@ -102,8 +100,6 @@ public class BinlogManager {
     }
 
     public void addUpsertRecord(UpsertRecord upsertRecord) {
-        LOG.info("add upsert record. upsertRecord: {}", upsertRecord);
-
         long dbId = upsertRecord.getDbId();
         List<Long> tableIds = upsertRecord.getAllReleatedTableIds();
         long commitSeq = upsertRecord.getCommitSeq();
@@ -115,8 +111,6 @@ public class BinlogManager {
     }
 
     public void addAddPartitionRecord(AddPartitionRecord addPartitionRecord) {
-        LOG.info("add partition record. partitionRecord: {}", addPartitionRecord);
-
         long dbId = addPartitionRecord.getDbId();
         List<Long> tableIds = new ArrayList<Long>();
         tableIds.add(addPartitionRecord.getTableId());
@@ -130,7 +124,6 @@ public class BinlogManager {
 
     // get binlog by dbId, return first binlog.version > version
     public Pair<TStatus, TBinlog> getBinlog(long dbId, long tableId, long commitSeq) {
-        LOG.info("get binlog. dbId: {}, tableId: {}, commitSeq: {}", dbId, tableId, commitSeq);
         TStatus status = new TStatus(TStatusCode.OK);
         lock.readLock().lock();
         try {
