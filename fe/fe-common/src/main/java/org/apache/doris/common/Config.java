@@ -1990,6 +1990,7 @@ public class Config extends ConfigBase {
                     + " including the specific reason why they are unqueryable, will be printed out."})
     public static boolean show_details_for_unaccessible_tablet = false;
 
-    @ConfField(mutable = false, masterOnly = false)
+    @ConfField(description = { "是否启用binlog特性",
+            "Whether to enable binlog feature" }, mutable = false, masterOnly = false, expType = ExperimentalType.EXPERIMENTAL)
     public static boolean enable_feature_binlog = false;
 }
