@@ -17,6 +17,8 @@
 
 #include "olap/olap_meta.h"
 
+#include <fmt/format.h>
+#include <fmt/ranges.h>
 #include <rocksdb/iterator.h>
 #include <rocksdb/status.h>
 #include <rocksdb/write_batch.h>
