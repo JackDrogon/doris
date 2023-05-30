@@ -24,6 +24,8 @@ import org.apache.doris.analysis.SetType;
 import org.apache.doris.analysis.TableName;
 import org.apache.doris.analysis.TypeDef;
 import org.apache.doris.analysis.UserIdentity;
+import org.apache.doris.backup.Snapshot;
+import org.apache.doris.backup.SnapshotInfo;
 import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.DatabaseIf;
@@ -76,6 +78,7 @@ import org.apache.doris.thrift.FrontendService;
 import org.apache.doris.thrift.FrontendServiceVersion;
 import org.apache.doris.thrift.TAddColumnsRequest;
 import org.apache.doris.thrift.TAddColumnsResult;
+import org.apache.doris.thrift.TAuthInfo;
 import org.apache.doris.thrift.TBeginTxnRequest;
 import org.apache.doris.thrift.TBeginTxnResult;
 import org.apache.doris.thrift.TBinlog;
@@ -106,6 +109,8 @@ import org.apache.doris.thrift.TGetBinlogResult;
 import org.apache.doris.thrift.TGetDbsParams;
 import org.apache.doris.thrift.TGetDbsResult;
 import org.apache.doris.thrift.TGetQueryStatsRequest;
+import org.apache.doris.thrift.TGetSnapshotRequest;
+import org.apache.doris.thrift.TGetSnapshotResult;
 import org.apache.doris.thrift.TGetTablesParams;
 import org.apache.doris.thrift.TGetTablesResult;
 import org.apache.doris.thrift.TGetTabletReplicaInfosRequest;
@@ -136,11 +141,14 @@ import org.apache.doris.thrift.TReplicaInfo;
 import org.apache.doris.thrift.TReportExecStatusParams;
 import org.apache.doris.thrift.TReportExecStatusResult;
 import org.apache.doris.thrift.TReportRequest;
+import org.apache.doris.thrift.TRestoreSnapshotRequest;
+import org.apache.doris.thrift.TRestoreSnapshotResult;
 import org.apache.doris.thrift.TRollbackTxnRequest;
 import org.apache.doris.thrift.TRollbackTxnResult;
 import org.apache.doris.thrift.TShowVariableRequest;
 import org.apache.doris.thrift.TShowVariableResult;
 import org.apache.doris.thrift.TSnapshotLoaderReportRequest;
+import org.apache.doris.thrift.TSnapshotType;
 import org.apache.doris.thrift.TStatus;
 import org.apache.doris.thrift.TStatusCode;
 import org.apache.doris.thrift.TStreamLoadPutRequest;
@@ -901,6 +909,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
                                        String clientIp, PrivPredicate predicate) throws AuthenticationException {
 
         final String fullUserName = ClusterNamespace.getFullName(cluster, user);
+        LOG.info("check password and privs. cluster: {}, user: {}, fulluser: {}, db: {}, tables: {}", cluster, user, fullUserName, db, tables);
         final String fullDbName = ClusterNamespace.getFullName(cluster, db);
         List<UserIdentity> currentUser = Lists.newArrayList();
         Env.getCurrentEnv().getAuth().checkPlainPassword(fullUserName, clientIp, passwd, currentUser);
@@ -2080,15 +2089,15 @@ public class FrontendServiceImpl implements FrontendService.Iface {
             throw new UserException("prev_commit_seq is not set");
         }
 
+
+        // step 1: check auth
         String cluster = request.getCluster();
         if (Strings.isNullOrEmpty(cluster)) {
             cluster = SystemInfoService.DEFAULT_CLUSTER;
         }
-
-        // step 1: check auth
         if (Strings.isNullOrEmpty(request.getToken())) {
             checkPasswordAndPrivs(cluster, request.getUser(), request.getPasswd(), request.getDb(), request.getTable(),
-                    request.getUserIp(), PrivPredicate.LOAD);
+                    request.getUserIp(), PrivPredicate.SHOW);
         }
 
         // step 3: check database
@@ -2137,4 +2146,107 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         }
         return result;
     }
+
+    // getSnapshot
+    public TGetSnapshotResult getSnapshot(TGetSnapshotRequest request) throws TException {
+        String clientAddr = getClientAddrAsString();
+        LOG.info("receive get snapshot info request: {}", request);
+
+        TGetSnapshotResult result = new TGetSnapshotResult();
+        TStatus status = new TStatus(TStatusCode.OK);
+        result.setStatus(status);
+        try {
+            result = getSnapshotImpl(request, clientAddr);
+        } catch (UserException e) {
+            LOG.warn("failed to get snapshot info: {}", e.getMessage());
+            status.setStatusCode(TStatusCode.ANALYSIS_ERROR);
+            status.addToErrorMsgs(e.getMessage());
+        } catch (Throwable e) {
+            LOG.warn("catch unknown result.", e);
+            status.setStatusCode(TStatusCode.INTERNAL_ERROR);
+            status.addToErrorMsgs(Strings.nullToEmpty(e.getMessage()));
+            return result;
+        }
+
+        return result;
+    }
+
+    // getSnapshotImpl
+    private TGetSnapshotResult getSnapshotImpl(TGetSnapshotRequest request, String clientIp)
+            throws UserException {
+        // Step 1: Check all required arg: user, passwd, db, label_name, snapshot_name, snapshot_type
+        if (!request.isSetUser()) {
+            throw new UserException("user is not set");
+        }
+        if (!request.isSetPasswd()) {
+            throw new UserException("passwd is not set");
+        }
+        if (!request.isSetDb()) {
+            throw new UserException("db is not set");
+        }
+        if (!request.isSetLabelName()) {
+            throw new UserException("label_name is not set");
+        }
+        if (!request.isSetSnapshotName()) {
+            throw new UserException("snapshot_name is not set");
+        }
+        if (!request.isSetSnapshotType()) {
+            throw new UserException("snapshot_type is not set");
+        } else if (request.getSnapshotType() != TSnapshotType.LOCAL) {
+            throw new UserException("snapshot_type is not LOCAL");
+        }
+
+        // Step 2: check auth
+        String cluster = request.getCluster();
+        if (Strings.isNullOrEmpty(cluster)) {
+            cluster = SystemInfoService.DEFAULT_CLUSTER;
+        }
+
+        LOG.info("get snapshot info, user: {}, db: {}, label_name: {}, snapshot_name: {}, snapshot_type: {}",
+                request.getUser(), request.getDb(), request.getLabelName(), request.getSnapshotName(),
+                request.getSnapshotType());
+        if (Strings.isNullOrEmpty(request.getToken())) {
+            checkPasswordAndPrivs(cluster, request.getUser(), request.getPasswd(), request.getDb(),
+                    request.getTable(), clientIp, PrivPredicate.LOAD);
+        }
+
+        // Step 3: get snapshot
+        TGetSnapshotResult result = new TGetSnapshotResult();
+        result.setStatus(new TStatus(TStatusCode.OK));
+        Snapshot snapshot = Env.getCurrentEnv().getBackupHandler().getSnapshot(request.getLabelName());
+        LOG.info("get snapshot info, snapshot: {}", snapshot);
+        if (snapshot == null) {
+            result.getStatus().setStatusCode(TStatusCode.SNAPSHOT_NOT_EXIST);
+            result.getStatus().addToErrorMsgs("snapshot not exist");
+        } else {
+            result.setMeta(snapshot.getMeta());
+            result.setJobInfo(snapshot.getJobInfo());
+        }
+
+        return result;
+    }
+
+    // // restore snapshot info
+    // public TRestoreSnapshotResult restoreSnapshot(TRestoreSnapshotRequest request) throws TException {
+    //     String clientAddr = getClientAddrAsString();
+    //     LOG.debug("receive restore snapshot request: {}", request);
+
+    //     TRestoreSnapshotResult result = new TRestoreSnapshotResult();
+    //     TStatus status = new TStatus(TStatusCode.OK);
+    //     result.setStatus(status);
+    //     try {
+    //         result = restoreSnapshotImpl(request, clientAddr);
+    //     } catch (UserException e) {
+    //         LOG.warn("failed to restore snapshot: {}", e.getMessage());
+    //         status.setStatusCode(TStatusCode.ANALYSIS_ERROR);
+    //         status.addToErrorMsgs(e.getMessage());
+    //     } catch (Throwable e) {
+    //         LOG.warn("catch unknown result.", e);
+    //         status.setStatusCode(TStatusCode.INTERNAL_ERROR);
+    //         status.addToErrorMsgs(Strings.nullToEmpty(e.getMessage()));
+    //         return result;
+    //     }
+
+    //     return result;
+    // }
 }

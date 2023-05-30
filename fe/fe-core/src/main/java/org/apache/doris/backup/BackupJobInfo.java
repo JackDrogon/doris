@@ -92,6 +92,9 @@ public class BackupJobInfo implements Writable {
     @SerializedName("meta_version")
     public int metaVersion;
 
+    @SerializedName("tablet_be_map")
+    public Map<Long, Long> tabletBeMap = Maps.newHashMap();
+
     // This map is used to save the table alias mapping info when processing a restore job.
     // origin -> alias
     public Map<String, String> tblAlias = Maps.newHashMap();
@@ -526,8 +529,10 @@ public class BackupJobInfo implements Writable {
                             }
                         } else {
                             for (Tablet tablet : index.getTablets()) {
+                                SnapshotInfo snapshotInfo = snapshotInfos.get(tablet.getId());
                                 idxInfo.tablets.put(tablet.getId(),
-                                        Lists.newArrayList(snapshotInfos.get(tablet.getId()).getFiles()));
+                                        Lists.newArrayList(snapshotInfo.getFiles()));
+                                jobInfo.tabletBeMap.put(tablet.getId(), snapshotInfo.getBeId());
                             }
                         }
                         idxInfo.tabletsOrder.addAll(index.getTabletIdsInOrder());

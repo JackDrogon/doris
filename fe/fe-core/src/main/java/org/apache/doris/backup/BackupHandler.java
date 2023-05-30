@@ -75,7 +75,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -103,6 +105,12 @@ public class BackupHandler extends MasterDaemon implements Writable {
     private boolean isInit = false;
 
     private Env env;
+
+    // map to store backup info, key is label name, value is Pair<meta, info>, meta && info is bytes
+    // this map not present in persist && only in fe master memory
+    // one table only keep one snapshot info, only keep last
+    private final Map<String, Snapshot> localSnapshots = new HashMap<>();
+    private ReadWriteLock localSnapshotsLock = new ReentrantReadWriteLock();
 
     public BackupHandler() {
         // for persist
@@ -241,9 +249,13 @@ public class BackupHandler extends MasterDaemon implements Writable {
     public void process(AbstractBackupStmt stmt) throws DdlException {
         // check if repo exist
         String repoName = stmt.getRepoName();
-        Repository repository = repoMgr.getRepo(repoName);
-        if (repository == null) {
-            ErrorReport.reportDdlException(ErrorCode.ERR_COMMON_ERROR, "Repository " + repoName + " does not exist");
+        Repository repository = null;
+        LOG.info("repoName: {}", repoName);
+        if (!repoName.equals(Repository.KEEP_ON_LOCAL_REPO_NAME)) {
+            repository = repoMgr.getRepo(repoName);
+            if (repository == null) {
+                ErrorReport.reportDdlException(ErrorCode.ERR_COMMON_ERROR, "Repository " + repoName + " does not exist");
+            }
         }
 
         // check if db exist
@@ -286,7 +298,7 @@ public class BackupHandler extends MasterDaemon implements Writable {
     }
 
     private void backup(Repository repository, Database db, BackupStmt stmt) throws DdlException {
-        if (repository.isReadOnly()) {
+        if (repository != null && repository.isReadOnly()) {
             ErrorReport.reportDdlException(ErrorCode.ERR_COMMON_ERROR, "Repository " + repository.getName()
                     + " is read only");
         }
@@ -357,25 +369,29 @@ public class BackupHandler extends MasterDaemon implements Writable {
         }
 
         // Check if label already be used
-        List<String> existSnapshotNames = Lists.newArrayList();
-        Status st = repository.listSnapshots(existSnapshotNames);
-        if (!st.ok()) {
-            ErrorReport.reportDdlException(ErrorCode.ERR_COMMON_ERROR, st.getErrMsg());
-        }
-        if (existSnapshotNames.contains(stmt.getLabel())) {
-            if (stmt.getType() == BackupType.FULL) {
-                ErrorReport.reportDdlException(ErrorCode.ERR_COMMON_ERROR, "Snapshot with name '"
-                        + stmt.getLabel() + "' already exist in repository");
-            } else {
-                ErrorReport.reportDdlException(ErrorCode.ERR_COMMON_ERROR, "Currently does not support "
-                        + "incremental backup");
+        long repoId = -1;
+        if (repository != null) {
+            List<String> existSnapshotNames = Lists.newArrayList();
+            Status st = repository.listSnapshots(existSnapshotNames);
+            if (!st.ok()) {
+                ErrorReport.reportDdlException(ErrorCode.ERR_COMMON_ERROR, st.getErrMsg());
             }
+            if (existSnapshotNames.contains(stmt.getLabel())) {
+                if (stmt.getType() == BackupType.FULL) {
+                    ErrorReport.reportDdlException(ErrorCode.ERR_COMMON_ERROR, "Snapshot with name '"
+                            + stmt.getLabel() + "' already exist in repository");
+                } else {
+                    ErrorReport.reportDdlException(ErrorCode.ERR_COMMON_ERROR, "Currently does not support "
+                            + "incremental backup");
+                }
+            }
+            repoId = repository.getId();
         }
 
         // Create a backup job
         BackupJob backupJob = new BackupJob(stmt.getLabel(), db.getId(),
                 ClusterNamespace.getNameFromFullName(db.getFullName()),
-                tblRefs, stmt.getTimeoutMs(), stmt.getContent(), env, repository.getId());
+                tblRefs, stmt.getTimeoutMs(), stmt.getContent(), env, repoId);
         // write log
         env.getEditLog().logBackupJob(backupJob);
 
@@ -665,6 +681,26 @@ public class BackupHandler extends MasterDaemon implements Writable {
             }
         }
         return false;
+    }
+
+    public void addSnapshot(String labelName, Snapshot snapshot) {
+        LOG.info("add snapshot info for label: {}, snapshot info: {}", labelName, snapshot);
+        localSnapshotsLock.writeLock().lock();
+        try {
+            localSnapshots.put(labelName, snapshot);
+        } finally {
+            localSnapshotsLock.writeLock().unlock();
+        }
+    }
+
+    public Snapshot getSnapshot(String labelName) {
+        LOG.info("get snapshot info for label: {}", labelName);
+        localSnapshotsLock.readLock().lock();
+        try {
+            return localSnapshots.get(labelName);
+        } finally {
+            localSnapshotsLock.readLock().unlock();
+        }
     }
 
     public static BackupHandler read(DataInput in) throws IOException {
