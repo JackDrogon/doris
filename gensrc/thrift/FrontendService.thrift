@@ -1012,7 +1012,7 @@ struct TRestoreSnapshotRequest {
     9: optional list<TTableRef> table_refs
     10: optional map<string, string> properties
     11: optional binary meta
-    12: optional binary info
+    12: optional binary job_info
 }
 
 struct TRestoreSnapshotResult {
@@ -1052,7 +1052,7 @@ service FrontendService {
     TRollbackTxnResult rollbackTxn(1: TRollbackTxnRequest request)
     TGetBinlogResult getBinlog(1: TGetBinlogRequest request)
     TGetSnapshotResult getSnapshot(1: TGetSnapshotRequest request)
-    // TRestoreSnapshotResult restoreSnapshot(1: TRestoreSnapshotRequest request)
+    TRestoreSnapshotResult restoreSnapshot(1: TRestoreSnapshotRequest request)
 
     TWaitingTxnStatusResult waitingTxnStatus(1: TWaitingTxnStatusRequest request)
 
