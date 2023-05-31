@@ -583,7 +583,7 @@ public class BackupJobInfo implements Writable {
         return genFromJson(json);
     }
 
-    private static BackupJobInfo genFromJson(String json) {
+    public static BackupJobInfo genFromJson(String json) {
         /* parse the json string:
          * {
          *   "backup_time": 1522231864000,

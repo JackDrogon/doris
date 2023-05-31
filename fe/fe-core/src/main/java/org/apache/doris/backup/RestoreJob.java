@@ -185,6 +185,18 @@ public class RestoreJob extends AbstractJob {
         properties.put(PROP_RESERVE_DYNAMIC_PARTITION_ENABLE, String.valueOf(reserveDynamicPartitionEnable));
     }
 
+    public RestoreJob(String label, String backupTs, long dbId, String dbName, BackupJobInfo jobInfo, boolean allowLoad,
+            ReplicaAllocation replicaAlloc, long timeoutMs, int metaVersion, boolean reserveReplica,
+            boolean reserveDynamicPartitionEnable, Env env, long repoId, BackupMeta backupMeta) {
+        this(label, backupTs, dbId, dbName, jobInfo, allowLoad, replicaAlloc, timeoutMs, metaVersion, reserveReplica,
+                reserveDynamicPartitionEnable, env, repoId);
+        this.backupMeta = backupMeta;
+    }
+
+    public boolean isFromLocalSnapshot() {
+        return repoId == Repository.KEEP_ON_LOCAL_REPO_ID;
+    }
+
     public RestoreJobState getState() {
         return state;
     }
@@ -1108,6 +1120,15 @@ public class RestoreJob extends AbstractJob {
     }
 
     private boolean downloadAndDeserializeMetaInfo() {
+        if (isFromLocalSnapshot()) {
+            if (backupMeta != null) {
+                return true;
+            }
+
+            status = new Status(ErrCode.COMMON_ERROR, "backupMeta is null");
+            return false;
+        }
+
         List<BackupMeta> backupMetas = Lists.newArrayList();
         Status st = repo.getSnapshotMetaFile(jobInfo.name, backupMetas,
                 this.metaVersion == -1 ? jobInfo.metaVersion : this.metaVersion);

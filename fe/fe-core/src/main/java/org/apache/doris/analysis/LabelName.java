@@ -27,6 +27,8 @@ import org.apache.doris.common.io.Writable;
 
 import com.google.common.base.Strings;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -35,6 +37,8 @@ import java.io.IOException;
 // TODO(tsy): maybe better to rename as `LoadLabel`
 // label name used to identify a load job
 public class LabelName implements Writable {
+    private static final Logger LOG = LogManager.getLogger(LabelName.class); // TODO: remove it
+
     private String dbName;
     private String labelName;
 
@@ -56,13 +60,17 @@ public class LabelName implements Writable {
     }
 
     public void analyze(Analyzer analyzer) throws AnalysisException {
+        LOG.info("label name: {}", this); // TODO: remove it
+        LOG.info("dbName: {}", dbName); // TODO: remove it
         if (Strings.isNullOrEmpty(dbName)) {
             if (Strings.isNullOrEmpty(analyzer.getDefaultDb())) {
                 ErrorReport.reportAnalysisException(ErrorCode.ERR_NO_DB_ERROR);
             }
             dbName = analyzer.getDefaultDb();
         }
+        LOG.info("dbName: {}", dbName); // TODO: remove it
         dbName = ClusterNamespace.getFullName(analyzer.getClusterName(), dbName);
+        LOG.info("dbName: {}", dbName); // TODO: remove it
         FeNameFormat.checkLabel(labelName);
     }
 

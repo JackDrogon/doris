@@ -62,7 +62,9 @@ import org.apache.commons.collections.CollectionUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.io.ByteArrayInputStream;
 import java.io.DataInput;
+import java.io.DataInputStream;
 import java.io.DataOutput;
 import java.io.File;
 import java.io.IOException;
@@ -260,6 +262,8 @@ public class BackupHandler extends MasterDaemon implements Writable {
 
         // check if db exist
         String dbName = stmt.getDbName();
+        LOG.info("stmt: {}", stmt); // TODO: remove it
+        LOG.info("dbName: {}", dbName); // TODO: remove it
         Database db = env.getInternalCatalog().getDbOrDdlException(dbName);
 
         // Try to get sequence lock.
@@ -402,29 +406,56 @@ public class BackupHandler extends MasterDaemon implements Writable {
     }
 
     private void restore(Repository repository, Database db, RestoreStmt stmt) throws DdlException {
-        // Check if snapshot exist in repository
-        List<BackupJobInfo> infos = Lists.newArrayList();
-        Status status = repository.getSnapshotInfoFile(stmt.getLabel(), stmt.getBackupTimestamp(), infos);
-        if (!status.ok()) {
-            ErrorReport.reportDdlException(ErrorCode.ERR_COMMON_ERROR,
-                                           "Failed to get info of snapshot '" + stmt.getLabel() + "' because: "
-                                                   + status.getErrMsg() + ". Maybe specified wrong backup timestamp");
-        }
+        BackupJobInfo jobInfo;
+        if (stmt.isLocal()) {
+            String jobInfoString = new String(stmt.getJobInfo());
+            jobInfo = BackupJobInfo.genFromJson(jobInfoString);
+        } else {
+            // Check if snapshot exist in repository
+            List<BackupJobInfo> infos = Lists.newArrayList();
+            Status status = repository.getSnapshotInfoFile(stmt.getLabel(), stmt.getBackupTimestamp(), infos);
+            if (!status.ok()) {
+                ErrorReport.reportDdlException(ErrorCode.ERR_COMMON_ERROR,
+                        "Failed to get info of snapshot '" + stmt.getLabel() + "' because: "
+                                + status.getErrMsg() + ". Maybe specified wrong backup timestamp");
+            }
 
-        // Check if all restore objects are exist in this snapshot.
-        // Also remove all unrelated objs
-        Preconditions.checkState(infos.size() == 1);
-        BackupJobInfo jobInfo = infos.get(0);
+            // Check if all restore objects are exist in this snapshot.
+            // Also remove all unrelated objs
+            Preconditions.checkState(infos.size() == 1);
+            jobInfo = infos.get(0);
+        }
+        LOG.info("job info: {}", jobInfo); // TODO: remove it
+
         checkAndFilterRestoreObjsExistInSnapshot(jobInfo, stmt.getAbstractBackupTableRefClause());
 
         // Create a restore job
-        RestoreJob restoreJob = new RestoreJob(stmt.getLabel(), stmt.getBackupTimestamp(),
+        RestoreJob restoreJob;
+        if (stmt.isLocal()) {
+            ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(stmt.getMeta());
+            DataInputStream dataInputStream = new DataInputStream(byteArrayInputStream);
+            try {
+                BackupMeta backupMeta = BackupMeta.read(dataInputStream);
+                LOG.info("backup meta: {}", backupMeta); // TODO: remove it
+                restoreJob = new RestoreJob(stmt.getLabel(), stmt.getBackupTimestamp(),
+                        db.getId(), db.getFullName(), jobInfo, stmt.allowLoad(), stmt.getReplicaAlloc(),
+                        stmt.getTimeoutMs(), stmt.getMetaVersion(), stmt.reserveReplica(),
+                        stmt.reserveDynamicPartitionEnable(),
+                        env, Repository.KEEP_ON_LOCAL_REPO_ID, backupMeta);
+            } catch (IOException e) {
+                throw new DdlException(e.getMessage());
+            }
+        } else {
+            restoreJob = new RestoreJob(stmt.getLabel(), stmt.getBackupTimestamp(),
                 db.getId(), db.getFullName(), jobInfo, stmt.allowLoad(), stmt.getReplicaAlloc(),
                 stmt.getTimeoutMs(), stmt.getMetaVersion(), stmt.reserveReplica(), stmt.reserveDynamicPartitionEnable(),
                 env, repository.getId());
+        }
+        LOG.info("restore job: {}", restoreJob); // TODO: remove it
+
         env.getEditLog().logRestoreJob(restoreJob);
 
-        // must put to dbIdToBackupOrRestoreJob after edit log, otherwise the state of job may be changed.
+        // // must put to dbIdToBackupOrRestoreJob after edit log, otherwise the state of job may be changed.
         addBackupOrRestoreJob(db.getId(), restoreJob);
 
         LOG.info("finished to submit restore job: {}", restoreJob);
