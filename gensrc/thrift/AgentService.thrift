@@ -287,6 +287,17 @@ struct TUploadReq {
     6: optional string location // root path
 }
 
+struct TRemoteTabletSnapshot {
+    1: optional i64 local_tablet_id
+    2: optional string local_snapshot_path
+    3: optional i64 remote_tablet_id
+    4: optional i64 remote_be_id
+    5: optional Types.TSchemaHash schema_hash
+    6: optional Types.TNetworkAddress remote_be_addr
+    7: optional string remote_snapshot_path
+    8: optional string token
+}
+
 struct TDownloadReq {
     1: required i64 job_id
     2: required map<string, string> src_dest_map
@@ -294,6 +305,7 @@ struct TDownloadReq {
     4: optional map<string, string> broker_prop
     5: optional Types.TStorageBackendType storage_backend = Types.TStorageBackendType.BROKER
     6: optional string location // root path
+    7: optional list<TRemoteTabletSnapshot> remote_tablets
 }
 
 struct TSnapshotRequest {

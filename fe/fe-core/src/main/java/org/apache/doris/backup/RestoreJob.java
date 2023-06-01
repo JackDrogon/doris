@@ -336,7 +336,7 @@ public class RestoreJob extends AbstractJob {
         }
 
         // get repo if not set
-        if (repo == null) {
+        if (repo == null && !isFromLocalSnapshot()) {
             repo = env.getBackupHandler().getRepoMgr().getRepo(repoId);
             if (repo == null) {
                 status = new Status(ErrCode.COMMON_ERROR, "failed to get repository: " + repoId);
@@ -1120,6 +1120,7 @@ public class RestoreJob extends AbstractJob {
     }
 
     private boolean downloadAndDeserializeMetaInfo() {
+        LOG.info("downloadAndDeserializeMetaInfo. jobInfo: {}", jobInfo); // TODO: remove it
         if (isFromLocalSnapshot()) {
             if (backupMeta != null) {
                 return true;
@@ -1309,13 +1310,16 @@ public class RestoreJob extends AbstractJob {
                     LOG.debug("backend {} has {} batch, total {} tasks, {}",
                               beId, batchNum, totalNum, this);
 
-                    List<FsBroker> brokerAddrs = Lists.newArrayList();
-                    Status st = repo.getBrokerAddress(beId, env, brokerAddrs);
-                    if (!st.ok()) {
-                        status = st;
-                        return;
+                    List<FsBroker> brokerAddrs = null;
+                    if (!isFromLocalSnapshot()) {
+                        brokerAddrs = Lists.newArrayList();
+                        Status st = repo.getBrokerAddress(beId, env, brokerAddrs);
+                        if (!st.ok()) {
+                            status = st;
+                            return;
+                        }
+                        Preconditions.checkState(brokerAddrs.size() == 1);
                     }
-                    Preconditions.checkState(brokerAddrs.size() == 1);
 
                     // allot tasks
                     int index = 0;

@@ -46,6 +46,7 @@ import org.apache.doris.common.ErrorReport;
 import org.apache.doris.common.Pair;
 import org.apache.doris.common.io.Writable;
 import org.apache.doris.common.util.MasterDaemon;
+import org.apache.doris.common.util.TimeUtils;
 import org.apache.doris.fs.FileSystemFactory;
 import org.apache.doris.fs.remote.RemoteFileSystem;
 import org.apache.doris.task.DirMoveTask;
@@ -437,7 +438,9 @@ public class BackupHandler extends MasterDaemon implements Writable {
             try {
                 BackupMeta backupMeta = BackupMeta.read(dataInputStream);
                 LOG.info("backup meta: {}", backupMeta); // TODO: remove it
-                restoreJob = new RestoreJob(stmt.getLabel(), stmt.getBackupTimestamp(),
+                String backupTimestamp = TimeUtils.longToTimeString(jobInfo.getBackupTime(), TimeUtils.DATETIME_FORMAT_WITH_HYPHEN);
+                LOG.info("backup timestamp: {}", backupTimestamp); // TODO: remove it
+                restoreJob = new RestoreJob(stmt.getLabel(), backupTimestamp,
                         db.getId(), db.getFullName(), jobInfo, stmt.allowLoad(), stmt.getReplicaAlloc(),
                         stmt.getTimeoutMs(), stmt.getMetaVersion(), stmt.reserveReplica(),
                         stmt.reserveDynamicPartitionEnable(),
@@ -455,7 +458,7 @@ public class BackupHandler extends MasterDaemon implements Writable {
 
         env.getEditLog().logRestoreJob(restoreJob);
 
-        // // must put to dbIdToBackupOrRestoreJob after edit log, otherwise the state of job may be changed.
+        // must put to dbIdToBackupOrRestoreJob after edit log, otherwise the state of job may be changed.
         addBackupOrRestoreJob(db.getId(), restoreJob);
 
         LOG.info("finished to submit restore job: {}", restoreJob);

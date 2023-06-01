@@ -95,9 +95,16 @@ public class BackupJobInfo implements Writable {
     @SerializedName("tablet_be_map")
     public Map<Long, Long> tabletBeMap = Maps.newHashMap();
 
+    @SerializedName("tablet_snapshot_path_map")
+    public Map<Long, String> tabletSnapshotPathMap = Maps.newHashMap();
+
     // This map is used to save the table alias mapping info when processing a restore job.
     // origin -> alias
     public Map<String, String> tblAlias = Maps.newHashMap();
+
+    public long getBackupTime() {
+        return backupTime;
+    }
 
     public void initBackupJobInfoAfterDeserialize() {
         // transform success
@@ -533,6 +540,7 @@ public class BackupJobInfo implements Writable {
                                 idxInfo.tablets.put(tablet.getId(),
                                         Lists.newArrayList(snapshotInfo.getFiles()));
                                 jobInfo.tabletBeMap.put(tablet.getId(), snapshotInfo.getBeId());
+                                jobInfo.tabletSnapshotPathMap.put(tablet.getId(), snapshotInfo.getPath());
                             }
                         }
                         idxInfo.tabletsOrder.addAll(index.getTabletIdsInOrder());

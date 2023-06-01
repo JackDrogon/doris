@@ -571,6 +571,7 @@ public class BackupJob extends AbstractJob {
     private void uploadSnapshot() {
         if (repoId == Repository.KEEP_ON_LOCAL_REPO_ID) {
             state = BackupJobState.UPLOADING;
+            LOG.info("snapshotInfos: {}", snapshotInfos);
             return;
         }
 
