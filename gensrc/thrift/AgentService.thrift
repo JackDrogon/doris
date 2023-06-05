@@ -305,7 +305,7 @@ struct TDownloadReq {
     4: optional map<string, string> broker_prop
     5: optional Types.TStorageBackendType storage_backend = Types.TStorageBackendType.BROKER
     6: optional string location // root path
-    7: optional list<TRemoteTabletSnapshot> remote_tablets
+    7: optional list<TRemoteTabletSnapshot> remote_tablet_snapshots
 }
 
 struct TSnapshotRequest {
