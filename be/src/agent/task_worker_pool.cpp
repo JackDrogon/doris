@@ -761,13 +761,15 @@ void TaskWorkerPool::_download_worker_thread_callback() {
             _tasks.pop_front();
         }
         LOG(INFO) << "get download task. signature=" << agent_task_req.signature
-                  << ", job_id=" << download_request.job_id;
+                  << ", job_id=" << download_request.job_id
+                  << "task detail: " << apache::thrift::ThriftDebugString(download_request);
 
         // TODO: download
         std::vector<int64_t> downloaded_tablet_ids;
 
         auto status = Status::OK();
         if (download_request.__isset.remote_tablet_snapshots) {
+            LOG(INFO) << "remote http download!"; // TODO: remove it
             SnapshotLoader loader(_env, download_request.job_id, agent_task_req.signature);
             loader.remote_http_download(download_request.remote_tablet_snapshots,
                                         &downloaded_tablet_ids);

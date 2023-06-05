@@ -36,6 +36,7 @@ import org.apache.doris.common.FeConstants;
 import org.apache.doris.common.io.Text;
 import org.apache.doris.common.io.Writable;
 import org.apache.doris.persist.gson.GsonUtils;
+import org.apache.doris.thrift.TNetworkAddress;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
@@ -43,6 +44,9 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
+
+import io.fabric8.openshift.api.model.Network;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -97,6 +101,24 @@ public class BackupJobInfo implements Writable {
 
     @SerializedName("tablet_snapshot_path_map")
     public Map<Long, String> tabletSnapshotPathMap = Maps.newHashMap();
+
+    public static class ExtraInfo {
+        public static class NetworkAddrss {
+            @SerializedName("ip")
+            public String ip;
+            @SerializedName("port")
+            public int port;
+        }
+
+        @SerializedName("be_network_map")
+        public Map<Long, NetworkAddrss> beNetworkMap = Maps.newHashMap();
+
+        @SerializedName("token")
+        public String token;
+    }
+    @SerializedName("extra_info")
+    public ExtraInfo extraInfo;
+
 
     // This map is used to save the table alias mapping info when processing a restore job.
     // origin -> alias
@@ -495,6 +517,62 @@ public class BackupJobInfo implements Writable {
         pathSeg.add(Repository.PREFIX_COMMON + ids.getTabletId());
 
         return Joiner.on("/").join(pathSeg);
+    }
+
+    // struct TRemoteTabletSnapshot {
+    //     1: optional i64 local_tablet_id
+    //     2: optional string local_snapshot_path
+    //     3: optional i64 remote_tablet_id
+    //     4: optional i64 remote_be_id
+    //     5: optional Types.TSchemaHash schema_hash
+    //     6: optional Types.TNetworkAddress remote_be_addr
+    //     7: optional string remote_snapshot_path
+    //     8: optional string token
+    // }
+
+    public String getTabletSnapshotPath(Long tabletId) {
+        return tabletSnapshotPathMap.get(tabletId);
+    }
+
+    public Long getBeId(Long tabletId) {
+        return tabletBeMap.get(tabletId);
+    }
+
+    public String getToken() {
+        return extraInfo.token;
+    }
+
+    public TNetworkAddress getBeAddr(Long beId) {
+        ExtraInfo.NetworkAddrss addr = extraInfo.beNetworkMap.get(beId);
+        if (addr == null) {
+            return null;
+        }
+
+        return new TNetworkAddress(addr.ip, addr.port);
+    }
+
+    // TODO(Drogon): improve this find perfermance
+    public Long getSchemaHash(long tableId, long partitionId, long indexId) {
+        for (BackupOlapTableInfo backupOlapTableInfo : backupOlapTableObjects.values()) {
+            if (backupOlapTableInfo.id != tableId) {
+                continue;
+            }
+
+            for (BackupPartitionInfo backupPartitionInfo : backupOlapTableInfo.partitions.values()) {
+                if (backupPartitionInfo.id != partitionId) {
+                    continue;
+                }
+
+                for (BackupIndexInfo backupIndexInfo : backupPartitionInfo.indexes.values()) {
+                    if (backupIndexInfo.id != indexId) {
+                        continue;
+                    }
+
+                    return Long.valueOf(backupIndexInfo.schemaHash);
+                }
+            }
+        }
+        return null;
     }
 
     public static BackupJobInfo fromCatalog(long backupTime, String label, String dbName, long dbId,

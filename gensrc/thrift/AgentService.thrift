@@ -292,10 +292,9 @@ struct TRemoteTabletSnapshot {
     2: optional string local_snapshot_path
     3: optional i64 remote_tablet_id
     4: optional i64 remote_be_id
-    5: optional Types.TSchemaHash schema_hash
-    6: optional Types.TNetworkAddress remote_be_addr
-    7: optional string remote_snapshot_path
-    8: optional string token
+    5: optional Types.TNetworkAddress remote_be_addr
+    6: optional string remote_snapshot_path
+    7: optional string remote_token
 }
 
 struct TDownloadReq {

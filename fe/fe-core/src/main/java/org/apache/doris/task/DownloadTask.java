@@ -78,11 +78,15 @@ public class DownloadTask extends AgentTask {
     }
 
     public TDownloadReq toThrift() {
+        // these fields are required
+        // 1: required i64 job_id
+        // 2: required map<string, string> src_dest_map
+        // 3: required Types.TNetworkAddress broker_addr
         TDownloadReq req;
         if (isFromLocalSnapshot) {
-            TNetworkAddress address = new TNetworkAddress("", 0); // mock address
-            req = new TDownloadReq(jobId, srcToDestPath, address);
-            req.setRemoteTablets(remoteTabletSnapshots);
+            TNetworkAddress brokerAddr = new TNetworkAddress("", 0); // mock broker address
+            req = new TDownloadReq(jobId, srcToDestPath, brokerAddr);
+            req.setRemoteTabletSnapshots(remoteTabletSnapshots);
         } else {
             TNetworkAddress address = new TNetworkAddress(brokerAddr.host, brokerAddr.port);
             req = new TDownloadReq(jobId, srcToDestPath, address);

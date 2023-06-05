@@ -376,6 +376,8 @@ Status SnapshotLoader::download(const std::map<std::string, std::string>& src_to
 Status SnapshotLoader::remote_http_download(
         const std::vector<TRemoteTabletSnapshot>& remote_tablet_snapshots,
         std::vector<int64_t>* downloaded_tablet_ids) {
+    LOG(INFO) << "begin to download snapshots via http. job: " << _job_id
+              << ", task id: " << _task_id; // TODO: remove it
     constexpr uint32_t kListRemoteFileTimeout = 15;
     constexpr uint32_t kDownloadFileMaxRetry = 3;
     constexpr uint32_t kGetLengthTimeout = 10;
@@ -388,6 +390,7 @@ Status SnapshotLoader::remote_http_download(
     // Step before, validate all remote
 
     // Step 1: Validate local tablet snapshot paths
+    LOG(INFO) << "validate local tablet snapshot paths"; // TODO: remove it
     for (auto& remote_tablet_snapshot : remote_tablet_snapshots) {
         auto& path = remote_tablet_snapshot.local_snapshot_path;
         bool res = true;
@@ -407,6 +410,7 @@ Status SnapshotLoader::remote_http_download(
         // TODO(Drogon): add md5sum
     };
     std::unordered_map<std::string, std::unordered_map<std::string, LocalFileStat>> local_files_map;
+    LOG(INFO) << "get all local files"; // TODO: remove it
     for (auto& remote_tablet_snapshot : remote_tablet_snapshots) {
         const auto& local_path = remote_tablet_snapshot.local_snapshot_path;
         std::vector<std::string> local_files;
@@ -442,10 +446,12 @@ Status SnapshotLoader::remote_http_download(
     };
     std::unordered_map<std::string, std::unordered_map<std::string, RemoteFileStat>>
             remote_files_map;
+    LOG(INFO) << "validate remote tablet snapshot paths"; // TODO: remove it
     for (auto& remote_tablet_snapshot : remote_tablet_snapshots) {
+        LOG(INFO) << "validate remote tablet snapshot path: " << remote_tablet_snapshot;
         const auto& remote_path = remote_tablet_snapshot.remote_snapshot_path;
         auto& remote_files = remote_files_map[remote_path];
-        const auto& token = remote_tablet_snapshot.token;
+        const auto& token = remote_tablet_snapshot.remote_token;
         const auto& remote_be_addr = remote_tablet_snapshot.remote_be_addr;
 
         // HEAD http://172.16.0.14:6781/api/_tablet/_download?token=e804dd27-86da-4072-af58-70724075d2a4&file=/home/ubuntu/doris_master/output/be/storage/snapshot/20230410102306.9.180/
@@ -455,24 +461,28 @@ Status SnapshotLoader::remote_http_download(
 
         string file_list_str;
         auto list_files_cb = [&remote_url_prefix, &file_list_str](HttpClient* client) {
+            LOG(INFO) << "list files url: " << remote_url_prefix; // TODO: remove it
             RETURN_IF_ERROR(client->init(remote_url_prefix));
             client->set_timeout_ms(kListRemoteFileTimeout * 1000);
             return client->execute(&file_list_str);
         };
         RETURN_IF_ERROR(HttpClient::execute_with_retry(kDownloadFileMaxRetry, 1, list_files_cb));
+        LOG(INFO) << "list files: " << file_list_str; // TODO: remove it
         std::vector<string> filename_list =
                 strings::Split(file_list_str, "\n", strings::SkipWhitespace());
+        LOG(INFO) << "list files size: " << filename_list.size(); // TODO: remove it
 
         for (const auto& filename : filename_list) {
             std::string remote_file_url = fmt::format(
                     "http://{}:{}/api/_tablet/_download?token={}&file={}/{}",
                     remote_tablet_snapshot.remote_be_addr.hostname,
-                    remote_tablet_snapshot.remote_be_addr.port, remote_tablet_snapshot.token,
+                    remote_tablet_snapshot.remote_be_addr.port, remote_tablet_snapshot.remote_token,
                     remote_tablet_snapshot.remote_snapshot_path, filename);
 
             // get file length
             uint64_t file_size = 0;
             auto get_file_size_cb = [&remote_file_url, &file_size](HttpClient* client) {
+                LOG(INFO) << "get file size: " << remote_file_url; // TODO: remove it
                 RETURN_IF_ERROR(client->init(remote_file_url));
                 client->set_timeout_ms(kGetLengthTimeout * 1000);
                 RETURN_IF_ERROR(client->head());
@@ -482,11 +492,14 @@ Status SnapshotLoader::remote_http_download(
             RETURN_IF_ERROR(
                     HttpClient::execute_with_retry(kDownloadFileMaxRetry, 1, get_file_size_cb));
 
+            LOG(INFO) << "file: " << filename << ", remote file url: " << remote_file_url
+                      << ", size: " << file_size; // TODO: remove it
             remote_files[filename] = RemoteFileStat {remote_file_url, file_size};
         }
     }
 
     // Step 4: Compare local and remote files && get all need download files
+    LOG(INFO) << "compare local and remote files"; // TODO: remove it
     for (auto& remote_tablet_snapshot : remote_tablet_snapshots) {
         RETURN_IF_ERROR(_report_every(10, &report_counter, finished_num, total_num,
                                       TTaskType::type::DOWNLOAD));
@@ -500,19 +513,21 @@ Status SnapshotLoader::remote_http_download(
         // get all need download files
         std::vector<std::string> need_download_files;
         for (const auto& [remote_file, remote_filestat] : remote_files) {
+            LOG(INFO) << fmt::format("remote file: {}, size: {}", remote_file,
+                                     remote_filestat.size);
             auto it = local_files.find(remote_file);
             if (it == local_files.end()) {
                 need_download_files.emplace_back(remote_file);
-                break;
+                continue;
             }
             if (_end_with(remote_file, ".hdr")) {
                 need_download_files.emplace_back(remote_file);
-                break;
+                continue;
             }
 
             if (auto& local_filestat = it->second; local_filestat.size != remote_filestat.size) {
                 need_download_files.emplace_back(remote_file);
-                break;
+                continue;
             }
             // TODO(Drogon): check by md5sum, if not match then download
 
@@ -550,7 +565,11 @@ Status SnapshotLoader::remote_http_download(
                 estimate_timeout = config::download_low_speed_time;
             }
 
-            std::string local_file_path = local_path + "/" + filename;
+            std::string local_filename;
+            RETURN_IF_ERROR(_replace_tablet_id(filename, local_tablet_id, &local_filename));
+            LOG(INFO) << "filename: " << filename
+                      << ", local filename: " << local_filename; // TODO: remove it
+            std::string local_file_path = local_path + "/" + local_filename;
 
             LOG(INFO) << "clone begin to download file from: " << remote_file_url
                       << " to: " << local_file_path << ". size(B): " << file_size
@@ -601,14 +620,25 @@ Status SnapshotLoader::remote_http_download(
         // local_files: contain all remote files and local files
         // finally, delete local files which are not in remote
         for (const auto& [local_file, local_filestat] : local_files) {
-            if (remote_files.contains(local_file)) {
+            // replace the tablet id in local file name with the remote tablet id,
+            // in order to compare the file name.
+            std::string new_name;
+            Status st = _replace_tablet_id(local_file, remote_tablet_id, &new_name);
+            if (!st.ok()) {
+                LOG(WARNING) << "failed to replace tablet id. unknown local file: " << st
+                             << ". ignore it";
+                continue;
+            }
+            VLOG_CRITICAL << "new file name after replace tablet id: " << new_name;
+            const auto& find = remote_files.find(new_name);
+            if (find != remote_files.end()) {
                 continue;
             }
 
             // delete
             std::string full_local_file = local_path + "/" + local_file;
-            VLOG_CRITICAL << "begin to delete local snapshot file: " << full_local_file
-                          << ", it does not exist in remote";
+            LOG(INFO) << "begin to delete local snapshot file: " << full_local_file
+                      << ", it does not exist in remote";
             if (remove(full_local_file.c_str()) != 0) {
                 LOG(WARNING) << "failed to delete unknown local file: " << full_local_file
                              << ", error: " << strerror(errno)

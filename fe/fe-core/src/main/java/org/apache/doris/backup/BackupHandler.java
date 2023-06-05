@@ -57,6 +57,7 @@ import org.apache.doris.thrift.TFinishTaskRequest;
 import org.apache.doris.thrift.TTaskType;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import org.apache.commons.collections.CollectionUtils;
@@ -411,6 +412,17 @@ public class BackupHandler extends MasterDaemon implements Writable {
         if (stmt.isLocal()) {
             String jobInfoString = new String(stmt.getJobInfo());
             jobInfo = BackupJobInfo.genFromJson(jobInfoString);
+            LOG.info("job info: {}", jobInfo); // TODO: remove it
+
+            if (jobInfo.extraInfo == null) {
+                ErrorReport.reportDdlException(ErrorCode.ERR_COMMON_ERROR, "Invalid job extra info empty");
+            }
+            if (jobInfo.extraInfo.beNetworkMap == null) {
+                ErrorReport.reportDdlException(ErrorCode.ERR_COMMON_ERROR, "Invalid job extra info be network map");
+            }
+            if (Strings.isNullOrEmpty(jobInfo.extraInfo.token)) {
+                ErrorReport.reportDdlException(ErrorCode.ERR_COMMON_ERROR, "Invalid job extra info token");
+            }
         } else {
             // Check if snapshot exist in repository
             List<BackupJobInfo> infos = Lists.newArrayList();
