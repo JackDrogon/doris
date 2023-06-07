@@ -21,6 +21,7 @@ import org.apache.doris.analysis.AddPartitionClause;
 import org.apache.doris.analysis.AddPartitionLikeClause;
 import org.apache.doris.analysis.AddRollupClause;
 import org.apache.doris.analysis.AlterClause;
+import org.apache.doris.analysis.AlterDatabasePropertyStmt;
 import org.apache.doris.analysis.AlterDatabaseQuotaStmt;
 import org.apache.doris.analysis.AlterDatabaseQuotaStmt.QuotaType;
 import org.apache.doris.analysis.AlterDatabaseRename;
@@ -134,6 +135,7 @@ import org.apache.doris.external.iceberg.IcebergCatalogMgr;
 import org.apache.doris.external.iceberg.IcebergTableCreationRecordMgr;
 import org.apache.doris.mtmv.MTMVJobFactory;
 import org.apache.doris.mtmv.metadata.MTMVJob;
+import org.apache.doris.persist.AlterDatabasePropertyInfo;
 import org.apache.doris.persist.ColocatePersistInfo;
 import org.apache.doris.persist.DatabaseInfo;
 import org.apache.doris.persist.DropDbInfo;
@@ -170,6 +172,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.spark.sql.execution.command.AlterDatabasePropertiesCommand;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.DataInputStream;
@@ -746,6 +749,32 @@ public class InternalCatalog implements CatalogIf<Database> {
             } else if (quotaType == QuotaType.TRANSACTION) {
                 db.setTransactionQuotaSize(quota);
             }
+        } finally {
+            db.writeUnlock();
+        }
+    }
+
+    public void alterDatabaseProperty(AlterDatabasePropertyStmt stmt) throws DdlException {
+        String dbName = stmt.getDbName();
+        Database db = (Database) getDbOrDdlException(dbName);
+        Map<String, String> properties = stmt.getProperties();
+
+        db.writeLockOrDdlException();
+        try {
+            db.updateDbProperties(properties);
+
+            AlterDatabasePropertyInfo info = new AlterDatabasePropertyInfo(dbName, properties);
+            Env.getCurrentEnv().getEditLog().logAlterDatabaseProperty(info);
+        } finally {
+            db.writeUnlock();
+        }
+    }
+
+    public void replayAlterDatabaseProperty(String dbName, Map<String, String> properties) throws MetaNotFoundException {
+        Database db = (Database) getDbOrMetaException(dbName);
+        db.writeLock();
+        try {
+            db.updateDbProperties(properties);
         } finally {
             db.writeUnlock();
         }
